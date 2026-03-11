@@ -682,7 +682,7 @@ class _MainArea extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${AppStrings.t(context, 'welcome')} $fullName 👋',
+                      '${AppStrings.t(context, 'welcome')} $fullName',
                       style: TextStyle(
                         color: titleColor,
                         fontSize: 36,
