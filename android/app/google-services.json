@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "785043015012",
+    "project_id": "project-30dd3c12-9d55-4261-bc5",
+    "storage_bucket": "project-30dd3c12-9d55-4261-bc5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:785043015012:android:387ef31f4df9afd9036671",
+        "android_client_info": {
+          "package_name": "com.example.clawcart"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAHf8xRj92EHopbn4cIblOivCJkFrRmRgg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

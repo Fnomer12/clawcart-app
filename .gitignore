@@ -1,0 +1,25 @@
+# Flutter
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+
+# macOS
+.DS_Store
+
+# Android
+android/.gradle
+android/app/build
+
+# VSCode
+.vscode/
+
+# Firebase
+firebase.json
