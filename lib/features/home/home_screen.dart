@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../app/app_settings.dart';
 import '../../app/app_strings.dart';
+import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -28,6 +29,9 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   int selectedHistoryIndex = 0;
+  bool isLoading = false;
+  Map<String, dynamic>? aiResult;
+  String? aiError;
 
   @override
   void dispose() {
@@ -35,20 +39,49 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  void _submitPrompt() {
+  Future<void> _submitPrompt() async {
     final text = promptCtrl.text.trim();
     if (text.isEmpty) return;
 
     setState(() {
-      searchHistory.insert(0, text);
+      if (!searchHistory.contains(text)) {
+        searchHistory.insert(0, text);
+      } else {
+        searchHistory.remove(text);
+        searchHistory.insert(0, text);
+      }
       selectedHistoryIndex = 0;
+      isLoading = true;
+      aiResult = null;
+      aiError = null;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Searching for: $text')),
-    );
+    try {
+      final response = await ApiService.getRecommendation(text);
 
-    promptCtrl.clear();
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+        final result = response['result'];
+        if (result is Map<String, dynamic>) {
+          aiResult = result;
+        } else {
+          aiError = 'Invalid response format';
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+        aiError = e.toString();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
   }
 
   @override
@@ -63,21 +96,21 @@ class _HomeScreenState extends State<HomeScreen> {
     final pageBg = theme.scaffoldBackgroundColor;
     final sidebarBg = isDark ? const Color(0xFF111118) : const Color(0xFFF5F6FA);
     final panelBg = isDark ? const Color(0xFF12121A) : Colors.white;
-    final cardBg = isDark ? const Color(0xFF181821) : const Color(0xFFF4F5F9);
     final borderColor =
         isDark ? const Color(0xFF232331) : const Color(0xFFD9DCE5);
     final titleColor = isDark ? Colors.white : Colors.black87;
     final subColor =
         isDark ? Colors.white.withValues(alpha: 0.68) : Colors.black54;
-    const accent = Color(0xFFFF5A52);
 
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
       builder: (context, snapshot) {
         final data = snapshot.data?.data() as Map<String, dynamic>?;
         final fullName =
-            data?['name'] ?? user.displayName ?? user.email ?? 'User';
-        final email = data?['email'] ?? user.email ?? 'No email';
+            (data?['name'] ?? user.displayName ?? user.email ?? 'User')
+                .toString();
+        final email =
+            (data?['email'] ?? user.email ?? 'No email').toString();
 
         return Scaffold(
           backgroundColor: pageBg,
@@ -113,57 +146,62 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-          body: SafeArea(
-            child: Row(
-              children: [
-                if (showPermanentSidebar)
-                  Container(
-                    width: 300,
-                    decoration: BoxDecoration(
-                      color: sidebarBg,
-                      border: Border(
-                        right: BorderSide(color: borderColor),
-                      ),
-                    ),
-                    child: _SidebarContent(
-                      fullName: fullName,
-                      email: email,
-                      history: searchHistory,
-                      selectedIndex: selectedHistoryIndex,
-                      panelBg: panelBg,
-                      borderColor: borderColor,
-                      titleColor: titleColor,
-                      subColor: subColor,
-                      onSelect: (index) {
-                        setState(() {
-                          selectedHistoryIndex = index;
-                          promptCtrl.text = searchHistory[index];
-                        });
-                      },
-                      onOpenSettings: () {
-                        _showSettingsSheet(
-                          context,
+          body: snapshot.connectionState == ConnectionState.waiting
+              ? const Center(child: CircularProgressIndicator())
+              : SafeArea(
+                  child: Row(
+                    children: [
+                      if (showPermanentSidebar)
+                        Container(
+                          width: 300,
+                          decoration: BoxDecoration(
+                            color: sidebarBg,
+                            border: Border(
+                              right: BorderSide(color: borderColor),
+                            ),
+                          ),
+                          child: _SidebarContent(
+                            fullName: fullName,
+                            email: email,
+                            history: searchHistory,
+                            selectedIndex: selectedHistoryIndex,
+                            panelBg: panelBg,
+                            borderColor: borderColor,
+                            titleColor: titleColor,
+                            subColor: subColor,
+                            onSelect: (index) {
+                              setState(() {
+                                selectedHistoryIndex = index;
+                                promptCtrl.text = searchHistory[index];
+                              });
+                            },
+                            onOpenSettings: () {
+                              _showSettingsSheet(
+                                context,
+                                fullName: fullName,
+                                email: email,
+                              );
+                            },
+                          ),
+                        ),
+                      Expanded(
+                        child: _MainArea(
                           fullName: fullName,
-                          email: email,
-                        );
-                      },
-                    ),
-                  ),
-                Expanded(
-                  child: _MainArea(
-                    fullName: fullName,
-                    promptCtrl: promptCtrl,
-                    onSubmit: _submitPrompt,
-                    showMenuButton: !showPermanentSidebar,
-                    panelBg: panelBg,
-                    borderColor: borderColor,
-                    titleColor: titleColor,
-                    subColor: subColor,
+                          promptCtrl: promptCtrl,
+                          onSubmit: _submitPrompt,
+                          showMenuButton: !showPermanentSidebar,
+                          panelBg: panelBg,
+                          borderColor: borderColor,
+                          titleColor: titleColor,
+                          subColor: subColor,
+                          isLoading: isLoading,
+                          aiResult: aiResult,
+                          aiError: aiError,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
         );
       },
     );
@@ -192,11 +230,10 @@ class _HomeScreenState extends State<HomeScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (context) {
+      builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            final selectedLanguage =
-                context.watch<AppSettings>().languageLabel;
+            final selectedLanguage = context.watch<AppSettings>().languageLabel;
             final selectedAppearance =
                 context.watch<AppSettings>().appearanceLabel;
 
@@ -292,13 +329,31 @@ class _HomeScreenState extends State<HomeScreen> {
                             setModalState(() {});
                           },
                         ),
+                        const SizedBox(height: 16),
+                        _actionTile(
+                          title: AppStrings.t(context, 'help'),
+                          subtitle: AppStrings.t(context, 'help_subtitle'),
+                          bg: card,
+                          border: border,
+                          titleColor: text,
+                          subColor: subText,
+                          icon: Icons.help_outline,
+                          onTap: () {
+                            Navigator.pop(sheetContext);
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const HelpPage(),
+                              ),
+                            );
+                          },
+                        ),
                         const SizedBox(height: 22),
                         SizedBox(
                           width: double.infinity,
                           height: 54,
                           child: OutlinedButton.icon(
                             onPressed: () async {
-                              Navigator.pop(context);
+                              Navigator.pop(sheetContext);
                               await authService.signOut();
                             },
                             style: OutlinedButton.styleFrom(
@@ -361,6 +416,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 4),
           Text(
             value,
+            softWrap: true,
             style: TextStyle(
               color: valueColor,
               fontSize: 16,
@@ -391,6 +447,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
+          isExpanded: true,
           dropdownColor: bg,
           iconEnabledColor: textColor,
           style: TextStyle(color: textColor, fontSize: 16),
@@ -398,13 +455,73 @@ class _HomeScreenState extends State<HomeScreen> {
               .map(
                 (item) => DropdownMenuItem<String>(
                   value: item,
-                  child: Text(item),
+                  child: Text(
+                    item,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               )
               .toList(),
           onChanged: (selected) {
             if (selected != null) onChanged(selected);
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _actionTile({
+    required String title,
+    required String subtitle,
+    required Color bg,
+    required Color border,
+    required Color titleColor,
+    required Color subColor,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: border),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: const Color(0xFFFF5A52)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    softWrap: true,
+                    style: TextStyle(
+                      color: titleColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    softWrap: true,
+                    style: TextStyle(
+                      color: subColor,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: subColor),
+          ],
         ),
       ),
     );
@@ -451,6 +568,8 @@ class _SidebarContent extends StatelessWidget {
               Expanded(
                 child: Text(
                   'ClawCart',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: titleColor,
                     fontSize: 22,
@@ -478,7 +597,7 @@ class _SidebarContent extends StatelessWidget {
               readOnly: true,
               style: TextStyle(color: titleColor),
               decoration: InputDecoration(
-                hintText: 'Search history',
+                hintText: AppStrings.t(context, 'search_history'),
                 hintStyle: TextStyle(color: subColor),
                 prefixIcon: Icon(Icons.search, color: subColor),
                 border: InputBorder.none,
@@ -492,7 +611,7 @@ class _SidebarContent extends StatelessWidget {
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             itemCount: history.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 6),
+            separatorBuilder: (_, _) => const SizedBox(height: 6),
             itemBuilder: (context, index) {
               final active = index == selectedIndex;
               return InkWell(
@@ -511,6 +630,7 @@ class _SidebarContent extends StatelessWidget {
                     ),
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
                         Icons.folder_open_outlined,
@@ -617,12 +737,15 @@ class _SidebarContent extends StatelessWidget {
 class _MainArea extends StatelessWidget {
   final String fullName;
   final TextEditingController promptCtrl;
-  final VoidCallback onSubmit;
+  final Future<void> Function() onSubmit;
   final bool showMenuButton;
   final Color panelBg;
   final Color borderColor;
   final Color titleColor;
   final Color subColor;
+  final bool isLoading;
+  final Map<String, dynamic>? aiResult;
+  final String? aiError;
 
   const _MainArea({
     required this.fullName,
@@ -633,11 +756,16 @@ class _MainArea extends StatelessWidget {
     required this.borderColor,
     required this.titleColor,
     required this.subColor,
+    required this.isLoading,
+    required this.aiResult,
+    required this.aiError,
   });
 
   @override
   Widget build(BuildContext context) {
     const accent = Color(0xFFFF5A52);
+    final width = MediaQuery.of(context).size.width;
+    final isSmallScreen = width < 600;
 
     return Column(
       children: [
@@ -661,6 +789,8 @@ class _MainArea extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'ClawCart',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: titleColor,
                       fontSize: 22,
@@ -674,7 +804,12 @@ class _MainArea extends StatelessWidget {
         ),
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+            padding: EdgeInsets.fromLTRB(
+              isSmallScreen ? 16 : 24,
+              24,
+              isSmallScreen ? 16 : 24,
+              24,
+            ),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 850),
@@ -682,26 +817,29 @@ class _MainArea extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${AppStrings.t(context, 'welcome')} $fullName',
+                      '${AppStrings.t(context, 'welcome')} $fullName 👋',
+                      softWrap: true,
                       style: TextStyle(
                         color: titleColor,
-                        fontSize: 36,
+                        fontSize: isSmallScreen ? 28 : 36,
                         fontWeight: FontWeight.w800,
+                        height: 1.15,
                       ),
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Tell ClawCart what you want, and it will help you compare and rank the best options.',
+                      AppStrings.t(context, 'home_subtitle'),
+                      softWrap: true,
                       style: TextStyle(
                         color: subColor,
-                        fontSize: 17,
+                        fontSize: isSmallScreen ? 16 : 17,
                         height: 1.5,
                       ),
                     ),
                     const SizedBox(height: 26),
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(20),
+                      padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
                       decoration: BoxDecoration(
                         color: panelBg,
                         borderRadius: BorderRadius.circular(24),
@@ -711,15 +849,23 @@ class _MainArea extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.auto_awesome, color: accent),
+                              const Padding(
+                                padding: EdgeInsets.only(top: 2),
+                                child: Icon(Icons.auto_awesome, color: accent),
+                              ),
                               const SizedBox(width: 10),
-                              Text(
-                                AppStrings.t(context, 'what_shopping_for'),
-                                style: TextStyle(
-                                  color: titleColor,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w700,
+                              Expanded(
+                                child: Text(
+                                  AppStrings.t(context, 'what_shopping_for'),
+                                  softWrap: true,
+                                  style: TextStyle(
+                                    color: titleColor,
+                                    fontSize: isSmallScreen ? 20 : 22,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.3,
+                                  ),
                                 ),
                               ),
                             ],
@@ -731,9 +877,11 @@ class _MainArea extends StatelessWidget {
                             minLines: 4,
                             style: TextStyle(color: titleColor),
                             decoration: InputDecoration(
-                              hintText:
-                                  'Example: Best laptop under \$1000 with good battery life and strong performance',
-                              hintStyle: TextStyle(color: subColor),
+                              hintText: AppStrings.t(context, 'prompt_example'),
+                              hintStyle: TextStyle(
+                                color: subColor,
+                                fontSize: isSmallScreen ? 15 : 16,
+                              ),
                               filled: true,
                               fillColor: panelBg,
                               enabledBorder: OutlineInputBorder(
@@ -747,71 +895,187 @@ class _MainArea extends StatelessWidget {
                                   width: 1.3,
                                 ),
                               ),
+                              contentPadding: const EdgeInsets.all(18),
                             ),
                           ),
                           const SizedBox(height: 16),
                           SizedBox(
                             width: double.infinity,
-                            height: 56,
                             child: ElevatedButton.icon(
-                              onPressed: onSubmit,
+                              onPressed: isLoading ? null : onSubmit,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: accent,
                                 foregroundColor: Colors.white,
+                                disabledBackgroundColor:
+                                    accent.withValues(alpha: 0.7),
+                                minimumSize: const Size.fromHeight(56),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 18,
+                                  vertical: 14,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(18),
                                 ),
                               ),
-                              icon: const Icon(Icons.search),
-                              label: const Text(
-                                'Find best options',
-                                style: TextStyle(
+                              icon: isLoading
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                          Colors.white,
+                                        ),
+                                      ),
+                                    )
+                                  : const Icon(Icons.search),
+                              label: Text(
+                                isLoading
+                                    ? 'Searching...'
+                                    : AppStrings.t(context, 'find_best_options'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
                                   fontSize: 17,
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
                             ),
                           ),
-                        ],
-                      ),
+                          if (aiError != null) ...[
+                            const SizedBox(height: 18),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: panelBg,
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(color: Colors.redAccent),
+                              ),
+                              child: Text(
+                                aiError!,
+                                style: const TextStyle(
+                                  color: Colors.redAccent,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (aiResult != null) ...[
+  const SizedBox(height: 18),
+  Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: panelBg,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: borderColor),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'AI Recommendation',
+          style: TextStyle(
+            color: titleColor,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        _resultRow(
+          'Category',
+          aiResult!['category']?.toString() ?? '-',
+          titleColor,
+          subColor,
+        ),
+        _resultRow(
+          'Budget',
+          aiResult!['budget'] != null
+              ? '\$${aiResult!['budget']}'
+              : '-',
+          titleColor,
+          subColor,
+        ),
+        _resultRow(
+          'Priorities',
+          (aiResult!['priorities'] as List?)?.join(', ') ?? '-',
+          titleColor,
+          subColor,
+        ),
+        _resultRow(
+          'Summary',
+          aiResult!['summary']?.toString() ?? '-',
+          titleColor,
+          subColor,
+        ),
+
+        const SizedBox(height: 16),
+
+        if ((aiResult!['suggestedProducts'] as List?) != null &&
+            (aiResult!['suggestedProducts'] as List).isNotEmpty) ...[
+          Text(
+            'Suggested Products',
+            style: TextStyle(
+              color: titleColor,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...(aiResult!['suggestedProducts'] as List)
+              .map(
+                (product) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: panelBg,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: borderColor),
                     ),
-                    const SizedBox(height: 24),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: panelBg,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            AppStrings.t(context, 'how_clawcart_helps'),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF5A52).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.shopping_bag_outlined,
+                            color: Color(0xFFFF5A52),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            product.toString(),
                             style: TextStyle(
                               color: titleColor,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              height: 1.35,
                             ),
                           ),
-                          const SizedBox(height: 14),
-                          _infoRow(
-                            'Understands your budget and preferences',
-                            subColor,
-                          ),
-                          _infoRow(
-                            'Compares products intelligently',
-                            subColor,
-                          ),
-                          _infoRow(
-                            'Ranks the best choices for you',
-                            subColor,
-                          ),
-                          _infoRow(
-                            'Prepares a smart checkout summary',
-                            subColor,
-                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+        ],
+      ],
+    ),
+  ),
+],
                         ],
                       ),
                     ),
@@ -825,24 +1089,149 @@ class _MainArea extends StatelessWidget {
     );
   }
 
-  Widget _infoRow(String text, Color subColor) {
+  Widget _resultRow(
+    String label,
+    String value,
+    Color titleColor,
+    Color subColor,
+  ) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 10),
+      child: RichText(
+        text: TextSpan(
+          style: TextStyle(
+            color: subColor,
+            fontSize: 15,
+            height: 1.5,
+          ),
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: TextStyle(
+                color: titleColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            TextSpan(text: value),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class HelpPage extends StatelessWidget {
+  const HelpPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final bg = theme.scaffoldBackgroundColor;
+    final card = isDark ? const Color(0xFF181821) : const Color(0xFFF4F5F9);
+    final border = isDark ? const Color(0xFF232331) : const Color(0xFFD9DCE5);
+    final text = isDark ? Colors.white : Colors.black87;
+    final subText = isDark ? Colors.white70 : Colors.black54;
+    const accent = Color(0xFFFF5A52);
+
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(
+        backgroundColor: bg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: Icon(Icons.close, color: text),
+        ),
+        title: Text(
+          AppStrings.t(context, 'help'),
+          style: TextStyle(
+            color: text,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: card,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline, color: accent, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        AppStrings.t(context, 'how_clawcart_helps'),
+                        style: TextStyle(
+                          color: text,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                _helpItem(
+                  AppStrings.t(context, 'help_budget_preferences'),
+                  subText,
+                ),
+                _helpItem(
+                  AppStrings.t(context, 'help_compare_products'),
+                  subText,
+                ),
+                _helpItem(
+                  AppStrings.t(context, 'help_rank_choices'),
+                  subText,
+                ),
+                _helpItem(
+                  AppStrings.t(context, 'help_checkout_summary'),
+                  subText,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _helpItem(String text, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.check_circle,
-            color: Color(0xFFFF5A52),
-            size: 18,
+          const Padding(
+            padding: EdgeInsets.only(top: 2),
+            child: Icon(
+              Icons.check_circle,
+              color: Color(0xFFFF5A52),
+              size: 18,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
+              softWrap: true,
               style: TextStyle(
-                color: subColor,
+                color: color,
                 fontSize: 15,
-                height: 1.4,
+                height: 1.45,
               ),
             ),
           ),
