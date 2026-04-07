@@ -75,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         isLoading = false;
-        aiError = e.toString();
+       aiError = 'AI is temporarily unavailable. Please try again later.';
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -963,6 +963,7 @@ class _MainArea extends StatelessWidget {
                               ),
                             ),
                           ],
+
                           if (aiResult != null) ...[
   const SizedBox(height: 18),
   Container(
@@ -985,7 +986,6 @@ class _MainArea extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-
         _resultRow(
           'Category',
           aiResult!['category']?.toString() ?? '-',
@@ -994,9 +994,7 @@ class _MainArea extends StatelessWidget {
         ),
         _resultRow(
           'Budget',
-          aiResult!['budget'] != null
-              ? '\$${aiResult!['budget']}'
-              : '-',
+          aiResult!['budget'] != null ? '\$${aiResult!['budget']}' : '-',
           titleColor,
           subColor,
         ),
@@ -1012,9 +1010,7 @@ class _MainArea extends StatelessWidget {
           titleColor,
           subColor,
         ),
-
         const SizedBox(height: 16),
-
         if ((aiResult!['suggestedProducts'] as List?) != null &&
             (aiResult!['suggestedProducts'] as List).isNotEmpty) ...[
           Text(
@@ -1076,6 +1072,7 @@ class _MainArea extends StatelessWidget {
     ),
   ),
 ],
+                          
                         ],
                       ),
                     ),
