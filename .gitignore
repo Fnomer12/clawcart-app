@@ -23,3 +23,7 @@ android/app/build
 
 # Firebase
 firebase.json
+
+# Secrets
+.env
+functions/.env
