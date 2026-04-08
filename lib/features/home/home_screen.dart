@@ -2,11 +2,33 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app_settings.dart';
 import '../../app/app_strings.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
+
+
+class SearchSession {
+  final String id;
+  String title;
+  String prompt;
+  Map<String, dynamic>? aiResult;
+  String? aiError;
+  String location;
+  RangeValues priceRange;
+
+  SearchSession({
+    required this.id,
+    required this.title,
+    this.prompt = '',
+    this.aiResult,
+    this.aiError,
+    this.location = 'US',
+    this.priceRange = const RangeValues(1, 500),
+  });
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,19 +41,40 @@ class _HomeScreenState extends State<HomeScreen> {
   final AuthService authService = AuthService();
   final TextEditingController promptCtrl = TextEditingController();
 
-  final List<String> searchHistory = [
-    'Best laptop under \$1000',
-    'Affordable iPhone with good battery',
-    'Best headphones for studying',
-    'Gaming mouse under \$50',
-    'Best smartwatch for fitness',
-    'Cheap tablet for note taking',
-  ];
-
+  late List<SearchSession> sessions;
   int selectedHistoryIndex = 0;
   bool isLoading = false;
-  Map<String, dynamic>? aiResult;
-  String? aiError;
+
+  SearchSession get currentSession => sessions[selectedHistoryIndex];
+
+  @override
+  void initState() {
+    super.initState();
+    sessions = [
+      SearchSession(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: 'New search',
+      ),
+    ];
+  }
+
+
+
+
+void _startNewSearch() {
+  final newSession = SearchSession(
+    id: DateTime.now().millisecondsSinceEpoch.toString(),
+    title: 'New search',
+  );
+
+  setState(() {
+    sessions.insert(0, newSession);
+    selectedHistoryIndex = 0;
+    promptCtrl.text = '';
+    isLoading = false;
+  });
+}
+
 
   @override
   void dispose() {
@@ -39,50 +82,58 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  Future<void> _submitPrompt() async {
-    final text = promptCtrl.text.trim();
-    if (text.isEmpty) return;
+
+Future<void> _submitPrompt() async {
+  final text = promptCtrl.text.trim();
+  if (text.isEmpty) return;
+
+  setState(() {
+    isLoading = true;
+    currentSession.prompt = text;
+    currentSession.aiResult = null;
+    currentSession.aiError = null;
+
+    if (currentSession.title == 'New search') {
+      currentSession.title =
+          text.length > 28 ? '${text.substring(0, 28)}...' : text;
+    }
+  });
+
+  try {
+    final response = await ApiService.getRecommendation(
+      text,
+      location: currentSession.location,
+      minPrice: currentSession.priceRange.start,
+      maxPrice: currentSession.priceRange.end,
+    );
+
+    if (!mounted) return;
 
     setState(() {
-      if (!searchHistory.contains(text)) {
-        searchHistory.insert(0, text);
+      isLoading = false;
+      final result = response['result'];
+      if (result is Map<String, dynamic>) {
+        currentSession.aiResult = result;
       } else {
-        searchHistory.remove(text);
-        searchHistory.insert(0, text);
+        currentSession.aiError = 'Invalid response format';
       }
-      selectedHistoryIndex = 0;
-      isLoading = true;
-      aiResult = null;
-      aiError = null;
+    });
+  } catch (e) {
+    if (!mounted) return;
+
+    setState(() {
+      isLoading = false;
+      currentSession.aiError =
+          'AI is temporarily unavailable. Please try again later.';
     });
 
-    try {
-      final response = await ApiService.getRecommendation(text);
-
-      if (!mounted) return;
-
-      setState(() {
-        isLoading = false;
-        final result = response['result'];
-        if (result is Map<String, dynamic>) {
-          aiResult = result;
-        } else {
-          aiError = 'Invalid response format';
-        }
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        isLoading = false;
-       aiError = 'AI is temporarily unavailable. Please try again later.';
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Something went wrong while getting recommendations.'),
+      ),
+    );
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -102,10 +153,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final subColor =
         isDark ? Colors.white.withValues(alpha: 0.68) : Colors.black54;
 
-    return FutureBuilder<DocumentSnapshot>(
+      
+
+    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
       builder: (context, snapshot) {
-        final data = snapshot.data?.data() as Map<String, dynamic>?;
+        final data = snapshot.data?.data();
         final fullName =
             (data?['name'] ?? user.displayName ?? user.email ?? 'User')
                 .toString();
@@ -120,21 +173,25 @@ class _HomeScreenState extends State<HomeScreen> {
                   backgroundColor: sidebarBg,
                   child: SafeArea(
                     child: _SidebarContent(
+                      onNewSearch: () {
+                      _startNewSearch();
+                      Navigator.pop(context);
+                    },
                       fullName: fullName,
                       email: email,
-                      history: searchHistory,
+                      history: sessions.map((s) => s.title).toList(),
                       selectedIndex: selectedHistoryIndex,
                       panelBg: panelBg,
                       borderColor: borderColor,
                       titleColor: titleColor,
                       subColor: subColor,
                       onSelect: (index) {
-                        setState(() {
-                          selectedHistoryIndex = index;
-                          promptCtrl.text = searchHistory[index];
-                        });
-                        Navigator.pop(context);
-                      },
+                      setState(() {
+                        selectedHistoryIndex = index;
+                        promptCtrl.text = sessions[index].prompt;
+                      });
+                      Navigator.pop(context);
+                    },
                       onOpenSettings: () {
                         Navigator.pop(context);
                         _showSettingsSheet(
@@ -161,20 +218,21 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           child: _SidebarContent(
+                            onNewSearch: _startNewSearch,
                             fullName: fullName,
                             email: email,
-                            history: searchHistory,
+                            history: sessions.map((s) => s.title).toList(),
                             selectedIndex: selectedHistoryIndex,
                             panelBg: panelBg,
                             borderColor: borderColor,
                             titleColor: titleColor,
                             subColor: subColor,
                             onSelect: (index) {
-                              setState(() {
-                                selectedHistoryIndex = index;
-                                promptCtrl.text = searchHistory[index];
-                              });
-                            },
+                            setState(() {
+                              selectedHistoryIndex = index;
+                              promptCtrl.text = sessions[index].prompt;
+                            });
+                          },
                             onOpenSettings: () {
                               _showSettingsSheet(
                                 context,
@@ -185,20 +243,32 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       Expanded(
-                        child: _MainArea(
-                          fullName: fullName,
-                          promptCtrl: promptCtrl,
-                          onSubmit: _submitPrompt,
-                          showMenuButton: !showPermanentSidebar,
-                          panelBg: panelBg,
-                          borderColor: borderColor,
-                          titleColor: titleColor,
-                          subColor: subColor,
-                          isLoading: isLoading,
-                          aiResult: aiResult,
-                          aiError: aiError,
-                        ),
-                      ),
+  child:_MainArea(
+  fullName: fullName,
+  promptCtrl: promptCtrl,
+  onSubmit: _submitPrompt,
+  showMenuButton: !showPermanentSidebar,
+  panelBg: panelBg,
+  borderColor: borderColor,
+  titleColor: titleColor,
+  subColor: subColor,
+  isLoading: isLoading,
+  aiResult: currentSession.aiResult,
+  aiError: currentSession.aiError,
+  selectedLocation: currentSession.location,
+  selectedPriceRange: currentSession.priceRange,
+  onLocationChanged: (value) {
+    setState(() {
+      currentSession.location = value;
+    });
+  },
+  onPriceRangeChanged: (value) {
+    setState(() {
+      currentSession.priceRange = value;
+    });
+  },
+),
+),
                     ],
                   ),
                 ),
@@ -535,23 +605,25 @@ class _SidebarContent extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelect;
   final VoidCallback onOpenSettings;
+  final VoidCallback onNewSearch;
   final Color panelBg;
   final Color borderColor;
   final Color titleColor;
   final Color subColor;
 
-  const _SidebarContent({
-    required this.fullName,
-    required this.email,
-    required this.history,
-    required this.selectedIndex,
-    required this.onSelect,
-    required this.onOpenSettings,
-    required this.panelBg,
-    required this.borderColor,
-    required this.titleColor,
-    required this.subColor,
-  });
+const _SidebarContent({
+  required this.fullName,
+  required this.email,
+  required this.history,
+  required this.selectedIndex,
+  required this.onSelect,
+  required this.onOpenSettings,
+  required this.onNewSearch,
+  required this.panelBg,
+  required this.borderColor,
+  required this.titleColor,
+  required this.subColor,
+});
 
   @override
   Widget build(BuildContext context) {
@@ -578,9 +650,10 @@ class _SidebarContent extends StatelessWidget {
                 ),
               ),
               IconButton(
-                onPressed: () {},
-                icon: Icon(Icons.edit_square, color: subColor),
-              ),
+                    onPressed: onNewSearch,
+                    tooltip: 'New search',
+                    icon: Icon(Icons.edit_square, color: subColor),
+                  ),
             ],
           ),
         ),
@@ -746,6 +819,10 @@ class _MainArea extends StatelessWidget {
   final bool isLoading;
   final Map<String, dynamic>? aiResult;
   final String? aiError;
+  final String selectedLocation;
+  final RangeValues selectedPriceRange;
+  final ValueChanged<String> onLocationChanged;
+  final ValueChanged<RangeValues> onPriceRangeChanged;
 
   const _MainArea({
     required this.fullName,
@@ -759,7 +836,22 @@ class _MainArea extends StatelessWidget {
     required this.isLoading,
     required this.aiResult,
     required this.aiError,
+    required this.selectedLocation,
+    required this.selectedPriceRange,
+    required this.onLocationChanged,
+    required this.onPriceRangeChanged,
   });
+
+  Future<void> _openProductUrl(String? url) async {
+    if (url == null || url.isEmpty) return;
+
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -817,7 +909,7 @@ class _MainArea extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${AppStrings.t(context, 'welcome')} $fullName 👋',
+                      '${AppStrings.t(context, 'welcome')} $fullName',
                       softWrap: true,
                       style: TextStyle(
                         color: titleColor,
@@ -899,6 +991,79 @@ class _MainArea extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 16),
+                          Text(
+                            'Location',
+                            style: TextStyle(
+                              color: titleColor,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            decoration: BoxDecoration(
+                              color: panelBg,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: borderColor),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: selectedLocation,
+                                isExpanded: true,
+                                dropdownColor: panelBg,
+                                iconEnabledColor: titleColor,
+                                style: TextStyle(color: titleColor, fontSize: 16),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 'US',
+                                    child: Text('United States'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'UK',
+                                    child: Text('United Kingdom'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'GH',
+                                    child: Text('Ghana'),
+                                  ),
+                                ],
+                                onChanged: (value) {
+                                  if (value != null) onLocationChanged(value);
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Price Range',
+                            style: TextStyle(
+                              color: titleColor,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '\$${selectedPriceRange.start.round()} - \$${selectedPriceRange.end.round()}',
+                            style: TextStyle(
+                              color: subColor,
+                              fontSize: 13,
+                            ),
+                          ),
+                          RangeSlider(
+                            values: selectedPriceRange,
+                            min: 0,
+                            max: 1000,
+                            divisions: 20,
+                            labels: RangeLabels(
+                              '\$${selectedPriceRange.start.round()}',
+                              '\$${selectedPriceRange.end.round()}',
+                            ),
+                            onChanged: onPriceRangeChanged,
+                          ),
+                          const SizedBox(height: 16),
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
@@ -963,116 +1128,339 @@ class _MainArea extends StatelessWidget {
                               ),
                             ),
                           ],
-
                           if (aiResult != null) ...[
-  const SizedBox(height: 18),
-  Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: panelBg,
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: borderColor),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'AI Recommendation',
-          style: TextStyle(
-            color: titleColor,
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
+                            const SizedBox(height: 18),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(18),
+                              decoration: BoxDecoration(
+                                color: panelBg,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: borderColor),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'AI Recommendation',
+                                    style: TextStyle(
+                                      color: titleColor,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  _resultRow(
+                                    'Category',
+                                    aiResult!['category']?.toString() ?? '-',
+                                    titleColor,
+                                    subColor,
+                                  ),
+                                  _resultRow(
+                                    'Budget',
+                                    aiResult!['budget'] != null
+                                        ? '\$${aiResult!['budget']}'
+                                        : '-',
+                                    titleColor,
+                                    subColor,
+                                  ),
+                                  _resultRow(
+                                    'Priorities',
+                                    (aiResult!['priorities'] as List?)?.join(', ') ?? '-',
+                                    titleColor,
+                                    subColor,
+                                  ),
+                                  _resultRow(
+                                    'Summary',
+                                    aiResult!['summary']?.toString() ?? '-',
+                                    titleColor,
+                                    subColor,
+                                  ),
+                                  if (aiResult!['bestProduct'] != null) ...[
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'Best Pick',
+                                      style: TextStyle(
+                                        color: titleColor,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: panelBg,
+                                        borderRadius: BorderRadius.circular(18),
+                                        border: Border.all(
+                                          color: const Color(0xFFFF5A52),
+                                          width: 1.2,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Container(
+                                                width: 42,
+                                                height: 42,
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFFF5A52)
+                                                      .withValues(alpha: 0.12),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                child: const Icon(
+                                                  Icons.workspace_premium_outlined,
+                                                  color: Color(0xFFFF5A52),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Text(
+                                                  aiResult!['bestProduct']['name']
+                                                          ?.toString() ??
+                                                      '-',
+                                                  style: TextStyle(
+                                                    color: titleColor,
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            aiResult!['bestProduct']['reason']
+                                                    ?.toString() ??
+                                                '',
+                                            style: TextStyle(
+                                              color: subColor,
+                                              fontSize: 14,
+                                              height: 1.45,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                  if ((aiResult!['products'] as List?) != null &&
+                                      (aiResult!['products'] as List).isNotEmpty) ...[
+                                    const SizedBox(height: 18),
+                                    Text(
+                                      'Fetched Items',
+                                      style: TextStyle(
+                                        color: titleColor,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    ...(aiResult!['products'] as List).map((item) {
+  final product = item as Map<String, dynamic>;
+  final imageUrl = product['image']?.toString() ?? '';
+  final productUrl = product['url']?.toString() ?? '';
+  final rating = product['rating'];
+  final price = product['price'];
+
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 14),
+    child: Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: panelBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-        ),
-        const SizedBox(height: 14),
-        _resultRow(
-          'Category',
-          aiResult!['category']?.toString() ?? '-',
-          titleColor,
-          subColor,
-        ),
-        _resultRow(
-          'Budget',
-          aiResult!['budget'] != null ? '\$${aiResult!['budget']}' : '-',
-          titleColor,
-          subColor,
-        ),
-        _resultRow(
-          'Priorities',
-          (aiResult!['priorities'] as List?)?.join(', ') ?? '-',
-          titleColor,
-          subColor,
-        ),
-        _resultRow(
-          'Summary',
-          aiResult!['summary']?.toString() ?? '-',
-          titleColor,
-          subColor,
-        ),
-        const SizedBox(height: 16),
-        if ((aiResult!['suggestedProducts'] as List?) != null &&
-            (aiResult!['suggestedProducts'] as List).isNotEmpty) ...[
-          Text(
-            'Suggested Products',
-            style: TextStyle(
-              color: titleColor,
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ...(aiResult!['suggestedProducts'] as List)
-              .map(
-                (product) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: panelBg,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: borderColor),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 38,
-                          height: 38,
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: imageUrl.isNotEmpty
+                      ? Image.network(
+                          imageUrl,
+                          width: 86,
+                          height: 86,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            width: 86,
+                            height: 86,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF5A52).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Icon(
+                              Icons.image_not_supported_outlined,
+                              color: Color(0xFFFF5A52),
+                            ),
+                          ),
+                        )
+                      : Container(
+                          width: 86,
+                          height: 86,
                           decoration: BoxDecoration(
                             color: const Color(0xFFFF5A52).withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                           ),
                           child: const Icon(
                             Icons.shopping_bag_outlined,
                             color: Color(0xFFFF5A52),
-                            size: 20,
+                            size: 30,
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            product.toString(),
-                            style: TextStyle(
-                              color: titleColor,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              height: 1.35,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        product['name']?.toString() ?? '-',
+                        style: TextStyle(
+                          color: titleColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF5A52).withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              price != null ? '\$$price' : 'Price unavailable',
+                              style: const TextStyle(
+                                color: Color(0xFFFF5A52),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              rating != null ? '⭐ $rating' : 'No rating',
+                              style: const TextStyle(
+                                color: Colors.amber,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Sold by ${product['store'] ?? 'Unknown store'}',
+                        style: TextStyle(
+                          color: subColor,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
                         ),
-                      ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              product['reason']?.toString() ?? '',
+              style: TextStyle(
+                color: subColor,
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: productUrl.isNotEmpty
+                        ? () => _openProductUrl(productUrl)
+                        : null,
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: borderColor),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    icon: const Icon(Icons.open_in_new, size: 18),
+                    label: const Text(
+                      'View product',
+                      style: TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
                 ),
-              )
-              .toList(),
-        ],
-      ],
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: productUrl.isNotEmpty
+                        ? () => _openProductUrl(productUrl)
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF5A52),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    icon: const Icon(Icons.shopping_cart_checkout, size: 18),
+                    label: const Text(
+                      'Buy now',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     ),
-  ),
-],
-                          
+  );
+}),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -1085,6 +1473,8 @@ class _MainArea extends StatelessWidget {
       ],
     );
   }
+
+  
 
   Widget _resultRow(
     String label,
@@ -1116,124 +1506,19 @@ class _MainArea extends StatelessWidget {
     );
   }
 }
-
 class HelpPage extends StatelessWidget {
   const HelpPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final bg = theme.scaffoldBackgroundColor;
-    final card = isDark ? const Color(0xFF181821) : const Color(0xFFF4F5F9);
-    final border = isDark ? const Color(0xFF232331) : const Color(0xFFD9DCE5);
-    final text = isDark ? Colors.white : Colors.black87;
-    final subText = isDark ? Colors.white70 : Colors.black54;
-    const accent = Color(0xFFFF5A52);
-
     return Scaffold(
-      backgroundColor: bg,
-      appBar: AppBar(
-        backgroundColor: bg,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          onPressed: () => Navigator.pop(context),
-          icon: Icon(Icons.close, color: text),
-        ),
-        title: Text(
-          AppStrings.t(context, 'help'),
-          style: TextStyle(
-            color: text,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: card,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.info_outline, color: accent, size: 22),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        AppStrings.t(context, 'how_clawcart_helps'),
-                        style: TextStyle(
-                          color: text,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                _helpItem(
-                  AppStrings.t(context, 'help_budget_preferences'),
-                  subText,
-                ),
-                _helpItem(
-                  AppStrings.t(context, 'help_compare_products'),
-                  subText,
-                ),
-                _helpItem(
-                  AppStrings.t(context, 'help_rank_choices'),
-                  subText,
-                ),
-                _helpItem(
-                  AppStrings.t(context, 'help_checkout_summary'),
-                  subText,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _helpItem(String text, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 2),
-            child: Icon(
-              Icons.check_circle,
-              color: Color(0xFFFF5A52),
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              softWrap: true,
-              style: TextStyle(
-                color: color,
-                fontSize: 15,
-                height: 1.45,
-              ),
-            ),
-          ),
-        ],
+      appBar: AppBar(title: const Text('Help')),
+      body: const Center(
+        child: Text('Help content here'),
       ),
     );
   }
 }
+
+
+

@@ -1,0 +1,100 @@
+i  emulators: Starting emulators: functions, extensions
+⚠  functions: The following emulators are not running, calls to these services from the Functions emulator will affect production: apphosting, auth, firestore, database, hosting, pubsub, storage, dataconnect
+(node:8609) MetadataLookupWarning: received unexpected error = network timeout at: http://169.254.169.254/computeMetadata/v1/instance code = UNKNOWN
+(Use `node --trace-warnings ...` to show where the warning was created)
+i  functions: Watching "/Users/macbookpro/Desktop/Valley View University/Mobile Application/clawcart/functions" for Cloud Functions...
+⚠  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory.
+✔  functions: Using node@24 from host.
+i  functions: Loaded environment variables from .env.
+Serving at port 8079
+
+[dotenv@17.3.1] injecting env (2) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+
+✔  functions: Loaded functions definitions from source: recommend.
+✔  functions[us-central1-recommend]: http function initialized (http://127.0.0.1:5001/project-30dd3c12-9d55-4261-bc5/us-central1/recommend).
+
+[90m┌─────────────────────────────────────────────────────────────┐[39m
+[90m│[39m ✔  All emulators ready! It is now safe to connect your app. [90m│[39m
+[90m│[39m i  View Emulator UI at http://127.0.0.1:4000/               [90m│[39m
+[90m└─────────────────────────────────────────────────────────────┘[39m
+
+[90m┌────────────[39m[90m┬────────────────[39m[90m┬──────────────────────────────────┐[39m
+[90m│[39m[33m Emulator   [39m[90m│[39m[33m Host:Port      [39m[90m│[39m[33m View in Emulator UI              [39m[90m│[39m
+[90m├────────────[39m[90m┼────────────────[39m[90m┼──────────────────────────────────┤[39m
+[90m│[39m Functions  [90m│[39m 127.0.0.1:5001 [90m│[39m http://127.0.0.1:4000/functions  [90m│[39m
+[90m├────────────[39m[90m┼────────────────[39m[90m┼──────────────────────────────────┤[39m
+[90m│[39m Extensions [90m│[39m 127.0.0.1:5001 [90m│[39m http://127.0.0.1:4000/extensions [90m│[39m
+[90m└────────────[39m[90m┴────────────────[39m[90m┴──────────────────────────────────┘[39m
+  Emulator Hub host: 127.0.0.1 port: 4400
+  Other reserved ports: 4500
+[90m┌─────────────────────────[39m[90m┬───────────────[39m[90m┬─────────────────────┐[39m
+[90m│[39m[33m Extension Instance Name [39m[90m│[39m[33m Extension Ref [39m[90m│[39m[33m View in Emulator UI [39m[90m│[39m
+[90m└─────────────────────────[39m[90m┴───────────────[39m[90m┴─────────────────────┘[39m
+Issues? Report them at https://github.com/firebase/firebase-tools/issues and attach the *-debug.log files.
+ 
+i  functions: Loaded environment variables from .env.
+>  [dotenv@17.3.1] injecting env (0) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+i  functions: Beginning execution of "us-central1-recommend"
+>  SERPAPI URL: https://serpapi.com/search.json?engine=google_shopping&q=PlayStation+5&api_key=HIDDEN_KEY&gl=us&hl=en&min_price=0&max_price=500
+⚠  External network resource requested!
+   - URL: "https://serpapi.com/search.json?engine=google_shopping&q=PlayStation+5&api_key=8415ac1ed143585af8b742ca0cedc896a19f3efa5db628f48e47b4aadccd65cb&gl=us&hl=en&min_price=0&max_price=500"
+ - Be careful, this may be a production service.
+>  SERPAPI STATUS: 400
+>  SERPAPI BODY: {
+>    "error": "`min_price` must be an integer greater than 0."
+>  }
+>  ========== ERROR START ==========
+>  Error: SerpApi request failed: 400 - `min_price` must be an integer greater than 0.
+>      at searchProducts (/Users/macbookpro/Desktop/Valley View University/Mobile Application/clawcart/functions/index.js:73:11)
+>      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+>      at async /Users/macbookpro/Desktop/Valley View University/Mobile Application/clawcart/functions/index.js:108:29
+>      at async /Users/macbookpro/Desktop/Valley View University/Mobile Application/clawcart/functions/node_modules/firebase-functions/lib/common/providers/https.js:566:4
+>      at async runFunction (/Users/macbookpro/.nvm/versions/node/v24.14.0/lib/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:399:9)
+>      at async runHTTPS (/Users/macbookpro/.nvm/versions/node/v24.14.0/lib/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:424:5)
+>      at async /Users/macbookpro/.nvm/versions/node/v24.14.0/lib/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:585:21
+>  MESSAGE: SerpApi request failed: 400 - `min_price` must be an integer greater than 0.
+>  STACK: Error: SerpApi request failed: 400 - `min_price` must be an integer greater than 0.
+>      at searchProducts (/Users/macbookpro/Desktop/Valley View University/Mobile Application/clawcart/functions/index.js:73:11)
+>      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+>      at async /Users/macbookpro/Desktop/Valley View University/Mobile Application/clawcart/functions/index.js:108:29
+>      at async /Users/macbookpro/Desktop/Valley View University/Mobile Application/clawcart/functions/node_modules/firebase-functions/lib/common/providers/https.js:566:4
+>      at async runFunction (/Users/macbookpro/.nvm/versions/node/v24.14.0/lib/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:399:9)
+>      at async runHTTPS (/Users/macbookpro/.nvm/versions/node/v24.14.0/lib/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:424:5)
+>      at async /Users/macbookpro/.nvm/versions/node/v24.14.0/lib/node_modules/firebase-tools/lib/emulator/functionsEmulatorRuntime.js:585:21
+>  ========== ERROR END ==========
+i  functions: Finished "us-central1-recommend" in 289.391041ms
+⚠  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory.
+✔  functions: Using node@24 from host.
+i  functions: Loaded environment variables from .env.
+Serving at port 8812
+
+[dotenv@17.3.1] injecting env (2) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+
+⚠  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory.
+✔  functions: Using node@24 from host.
+i  functions: Loaded environment variables from .env.
+Serving at port 8363
+
+[dotenv@17.3.1] injecting env (2) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+
+✔  functions: Loaded functions definitions from source: recommend.
+✔  functions: Loaded functions definitions from source: recommend.
+⚠  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory.
+✔  functions: Using node@24 from host.
+i  functions: Loaded environment variables from .env.
+Serving at port 8203
+
+[dotenv@17.3.1] injecting env (2) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
+
+✔  functions: Loaded functions definitions from source: recommend.
+ 
+i  emulators: Received SIGINT (Ctrl-C) for the first time. Starting a clean shutdown.
+i  emulators: Please wait for a clean shutdown or send the SIGINT (Ctrl-C) signal again to stop right now.
+i  emulators: Shutting down emulators.
+i  ui: Stopping Emulator UI
+i  extensions: Stopping Extensions Emulator
+i  functions: Stopping Functions Emulator
+i  eventarc: Stopping Eventarc Emulator
+i  tasks: Stopping Cloud Tasks Emulator
+i  hub: Stopping emulator hub
+i  logging: Stopping Logging Emulator
