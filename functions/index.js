@@ -1,31 +1,88 @@
 require("dotenv").config();
 
-
-
 const functions = require("firebase-functions");
 const OpenAI = require("openai");
 const fetch = require("node-fetch");
-
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 function extractBudget(prompt) {
-  const match = prompt.match(/\$?(\d{2,5})/);
+  if (!prompt || typeof prompt !== "string") return null;
+
+  const match = prompt.match(/\$?(\d{2,6})/);
   return match ? Number(match[1]) : null;
+}
+
+function toNumberOrNull(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
 }
 
 function getLocationConfig(location) {
   switch ((location || "US").toUpperCase()) {
     case "GH":
-      return { gl: "gh", hl: "en" };
+      return {
+        countryCode: "GH",
+        gl: null,
+        hl: "en",
+        googleDomain: "google.com",
+        currencySymbol: "GH₵",
+      };
+
     case "UK":
-      return { gl: "uk", hl: "en" };
+      return {
+        countryCode: "UK",
+        gl: "uk",
+        hl: "en",
+        googleDomain: "google.co.uk",
+        currencySymbol: "£",
+      };
+
     case "US":
     default:
-      return { gl: "us", hl: "en" };
+      return {
+        countryCode: "US",
+        gl: "us",
+        hl: "en",
+        googleDomain: "google.com",
+        currencySymbol: "$",
+      };
   }
+}
+
+function cleanUrl(url) {
+  if (!url || typeof url !== "string") return "";
+  return url.trim();
+}
+
+function pickBestUrl(item) {
+  return (
+    cleanUrl(item.product_link) ||
+    cleanUrl(item.link) ||
+    cleanUrl(item.serpapi_link) ||
+    cleanUrl(item.inline_shopping_link) ||
+    ""
+  );
+}
+
+function normalizeProduct(item) {
+  return {
+    name: item.title ?? "Unknown product",
+    price:
+      typeof item.extracted_price === "number" ? item.extracted_price : null,
+    store: item.source ?? item.store ?? "Unknown store",
+    rating: typeof item.rating === "number" ? item.rating : null,
+    image: item.thumbnail ?? item.thumbnails?.[0] ?? "",
+    url: pickBestUrl(item),
+  };
 }
 
 async function searchProducts(query, location, minPrice, maxPrice) {
@@ -35,21 +92,25 @@ async function searchProducts(query, location, minPrice, maxPrice) {
     throw new Error("Missing SERPAPI_KEY in functions/.env");
   }
 
-  const { gl, hl } = getLocationConfig(location);
+  const { gl, hl, googleDomain } = getLocationConfig(location);
 
   const params = new URLSearchParams({
     engine: "google_shopping",
     q: query,
     api_key: apiKey,
-    gl,
     hl,
+    google_domain: googleDomain,
   });
 
-    if (typeof minPrice === "number" && minPrice > 0) {
+  if (gl) {
+    params.set("gl", gl);
+  }
+
+  if (typeof minPrice === "number" && Number.isFinite(minPrice) && minPrice > 0) {
     params.set("min_price", String(Math.round(minPrice)));
   }
 
-    if (typeof maxPrice === "number" && maxPrice > 0) {
+  if (typeof maxPrice === "number" && Number.isFinite(maxPrice) && maxPrice > 0) {
     params.set("max_price", String(Math.round(maxPrice)));
   }
 
@@ -65,7 +126,7 @@ async function searchProducts(query, location, minPrice, maxPrice) {
   let data;
   try {
     data = JSON.parse(rawText);
-  } catch (e) {
+  } catch (error) {
     throw new Error(`SerpApi returned non-JSON response: ${rawText}`);
   }
 
@@ -79,76 +140,33 @@ async function searchProducts(query, location, minPrice, maxPrice) {
     ? data.shopping_results
     : [];
 
-    console.log(
-  "SERP SAMPLE:",
-  shoppingResults.slice(0, 2).map((item) => ({
-    title: item.title,
-    link: item.link,
-    product_link: item.product_link,
-    serpapi_link: item.serpapi_link,
-    inline_shopping_link: item.inline_shopping_link,
-  }))
-);
+  console.log(
+    "SERP SAMPLE:",
+    shoppingResults.slice(0, 2).map((item) => ({
+      title: item.title,
+      link: item.link,
+      product_link: item.product_link,
+      serpapi_link: item.serpapi_link,
+      inline_shopping_link: item.inline_shopping_link,
+    }))
+  );
 
-return shoppingResults.slice(0, 8).map((item) => ({
-  name: item.title ?? "Unknown product",
-  price:
-    typeof item.extracted_price === "number" ? item.extracted_price : null,
-  store: item.source ?? item.store ?? "Unknown store",
-  rating: typeof item.rating === "number" ? item.rating : null,
-  image: item.thumbnail ?? item.thumbnails?.[0] ?? "",
-  url:
-    item.product_link ??
-    item.link ??
-    item.serpapi_link ??
-    item.inline_shopping_link ??
-    "",
-}));
+  return shoppingResults.slice(0, 8).map(normalizeProduct);
 }
 
-exports.recommend = functions.https.onRequest(async (req, res) => {
-  try {
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Method not allowed" });
-    }
-
-    const { prompt, location, minPrice, maxPrice } = req.body || {};
-
-    if (!prompt || !prompt.trim()) {
-      return res.status(400).json({ error: "Prompt is required" });
-    }
-
-    const inferredBudget = extractBudget(prompt);
-    const effectiveMaxPrice =
-      typeof maxPrice === "number" ? maxPrice : inferredBudget;
-
-    const fetchedProducts = await searchProducts(
-      prompt,
-      location,
-      typeof minPrice === "number" ? minPrice : null,
-      effectiveMaxPrice
-    );
-
-    if (fetchedProducts.length === 0) {
-      return res.json({
-        success: true,
-        result: {
-          category: "general",
-          budget: effectiveMaxPrice ?? null,
-          priorities: ["value", "quality"],
-          summary: "No matching products were found for this request.",
-          bestProduct: null,
-          products: [],
-        },
-      });
-    }
-
-    const aiResponse = await client.responses.create({
-      model: "gpt-5.4-mini",
-      input: [
-        {
-          role: "system",
-          content: `
+async function generateAIResult({
+  prompt,
+  location,
+  minPrice,
+  maxPrice,
+  fetchedProducts,
+}) {
+  const aiResponse = await client.responses.create({
+    model: "gpt-5.4-mini",
+    input: [
+      {
+        role: "system",
+        content: `
 You are ClawCart AI, a shopping assistant.
 
 You will receive:
@@ -156,7 +174,7 @@ You will receive:
 2. a list of real fetched products
 
 Your job:
-- understand the category
+- identify the category
 - infer priorities from the prompt
 - choose the single best product from the provided list
 - explain why it is the best
@@ -193,47 +211,150 @@ Rules:
 - Keep products limited to the provided list
 - Choose bestProduct from the provided products
 - Preserve image and url fields exactly as given
+- Preserve price, store, and rating from the provided products
 - If budget is not stated, use null
-          `.trim(),
-        },
-        {
-          role: "user",
-          content: JSON.stringify({
-            prompt,
-            location: location || "US",
-            minPrice: typeof minPrice === "number" ? minPrice : null,
-            maxPrice: effectiveMaxPrice,
-            products: fetchedProducts,
-          }),
-        },
-      ],
-    });
+        `.trim(),
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          prompt,
+          location,
+          minPrice,
+          maxPrice,
+          products: fetchedProducts,
+        }),
+      },
+    ],
+  });
 
-    const text = aiResponse.output_text?.trim();
+  const text = aiResponse.output_text?.trim();
 
-    if (!text) {
-      return res.status(500).json({
+  if (!text) {
+    throw new Error("Empty response from AI");
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    console.log("AI RAW OUTPUT:", text);
+    throw new Error("AI returned invalid JSON");
+  }
+
+  return parsed;
+}
+
+exports.recommend = functions.https.onRequest(async (req, res) => {
+  try {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+
+    if (req.method === "OPTIONS") {
+      return res.status(204).send("");
+    }
+
+    if (req.method !== "POST") {
+      return res.status(405).json({
         success: false,
-        error: "Empty response from AI",
+        error: "Method not allowed",
       });
     }
 
-    const parsed = JSON.parse(text);
+    const { prompt, location, minPrice, maxPrice } = req.body || {};
+
+    if (!prompt || !String(prompt).trim()) {
+      return res.status(400).json({
+        success: false,
+        error: "Prompt is required",
+      });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: "Missing OPENAI_API_KEY in functions/.env",
+      });
+    }
+
+    const cleanPrompt = String(prompt).trim();
+    const normalizedLocation = (location || "US").toUpperCase();
+
+    const parsedMinPrice = toNumberOrNull(minPrice);
+    const parsedMaxPrice = toNumberOrNull(maxPrice);
+    const inferredBudget = extractBudget(cleanPrompt);
+
+    const effectiveMaxPrice =
+      parsedMaxPrice !== null ? parsedMaxPrice : inferredBudget;
+
+    const fetchedProducts = await searchProducts(
+      cleanPrompt,
+      normalizedLocation,
+      parsedMinPrice,
+      effectiveMaxPrice
+    );
+
+    if (fetchedProducts.length === 0) {
+      return res.json({
+        success: true,
+        result: {
+          category: "general",
+          budget: effectiveMaxPrice ?? null,
+          priorities: ["value", "quality"],
+          summary: "No matching products were found for this request.",
+          bestProduct: null,
+          products: [],
+        },
+      });
+    }
+
+    const parsed = await generateAIResult({
+      prompt: cleanPrompt,
+      location: normalizedLocation,
+      minPrice: parsedMinPrice,
+      maxPrice: effectiveMaxPrice,
+      fetchedProducts,
+    });
+
+    if (!Array.isArray(parsed.products)) {
+      parsed.products = fetchedProducts.map((product) => ({
+        ...product,
+        reason: "A relevant option based on your request.",
+      }));
+    }
+
+    if (
+      parsed.bestProduct &&
+      typeof parsed.bestProduct === "object" &&
+      parsed.bestProduct.name
+    ) {
+      const existsInProducts = parsed.products.some(
+        (product) => product.name === parsed.bestProduct.name
+      );
+
+      if (!existsInProducts && parsed.products.length > 0) {
+        parsed.bestProduct = {
+          name: parsed.products[0].name,
+          reason: parsed.bestProduct.reason || "Top available option.",
+        };
+      }
+    }
 
     return res.json({
       success: true,
       result: parsed,
     });
-    } catch (error) {
-  console.log("========== ERROR START ==========");
-  console.log(error);
-  console.log("MESSAGE:", error?.message);
-  console.log("STACK:", error?.stack);
-  console.log("========== ERROR END ==========");
+  } catch (error) {
+    console.log("========== ERROR START ==========");
+    console.log(error);
+    console.log("MESSAGE:", error?.message);
+    console.log("STACK:", error?.stack);
+    console.log("========== ERROR END ==========");
 
-  return res.status(500).json({
-    success: false,
-    error: error?.message || "Unknown error",
-  });
-}
+    return res.status(500).json({
+      success: false,
+      error: error?.message || "Unknown error",
+    });
+  }
 });
