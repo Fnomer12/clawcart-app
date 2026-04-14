@@ -1,13 +1,25 @@
-import 'dart:async';
 import 'dart:convert';
-
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-import '../config/env.dart';
-import '../utils/logger.dart';
-
 class ApiService {
-  static String get baseUrl => Env.baseUrl;
+  /// 🔥 CHANGE THIS AFTER DEPLOYMENT
+  /// Local testing (ONLY for emulator/dev)
+  static const String _localUrl = 'http://10.0.2.2:3000'; // Android emulator
+  static const String _webLocalUrl = 'http://127.0.0.1:3000'; // Web/iOS local
+
+  /// 🌍 PRODUCTION URL (REPLACE THIS)
+  static const String _prodUrl = 'https://your-backend.onrender.com';
+
+  /// Automatically switch based on environment
+  static String get baseUrl {
+    if (kDebugMode) {
+      // 👇 Handles emulator vs web
+      if (kIsWeb) return _webLocalUrl;
+      return _localUrl;
+    }
+    return _prodUrl;
+  }
 
   static Future<Map<String, dynamic>> getRecommendation(
     String prompt, {
@@ -17,61 +29,43 @@ class ApiService {
   }) async {
     final uri = Uri.parse('$baseUrl/recommend');
 
-    final body = {
-      'prompt': prompt.trim(),
-      'location': location,
-      'minPrice': minPrice.round(),
-      'maxPrice': maxPrice.round(),
-    };
+    debugPrint('🌐 POST => $uri');
 
     try {
-      AppLogger.log('Sending request to: $uri');
-      AppLogger.log('Request body: ${jsonEncode(body)}');
-
       final response = await http
           .post(
             uri,
             headers: const {
               'Content-Type': 'application/json',
             },
-            body: jsonEncode(body),
+            body: jsonEncode({
+              'prompt': prompt.trim(),
+              'location': location,
+              'minPrice': minPrice.round(),
+              'maxPrice': maxPrice.round(),
+            }),
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
 
-      AppLogger.log('Response status: ${response.statusCode}');
-      AppLogger.log('Response body: ${response.body}');
+      debugPrint('📥 STATUS => ${response.statusCode}');
+      debugPrint('📥 BODY => ${response.body}');
 
-      if (response.body.isEmpty) {
-        throw Exception('Empty response from server');
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Server error ${response.statusCode}: ${response.body}',
+        );
       }
 
       final decoded = jsonDecode(response.body);
 
-      if (response.statusCode == 200) {
-        if (decoded is Map<String, dynamic>) {
-          return decoded;
-        }
-        throw Exception('Invalid response format');
-      } else {
-        if (decoded is Map<String, dynamic>) {
-          throw Exception(
-            decoded['error']?.toString() ?? 'Server error occurred',
-          );
-        }
-        throw Exception('Server error occurred');
+      if (decoded is! Map<String, dynamic>) {
+        throw Exception('Invalid server response format');
       }
-    } on TimeoutException {
-      AppLogger.error('Request timed out');
-      throw Exception('Request timed out. Please try again.');
-    } on FormatException {
-      AppLogger.error('Invalid JSON response');
-      throw Exception('Invalid server response.');
-    } on http.ClientException catch (e) {
-      AppLogger.error('Client error: $e');
-      throw Exception('Network error. Check your connection or server.');
+
+      return decoded;
     } catch (e) {
-      AppLogger.error('ApiService error: $e');
-      throw Exception(e.toString());
+      debugPrint('❌ ApiService error: $e');
+      rethrow;
     }
   }
 }

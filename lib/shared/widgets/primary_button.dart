@@ -2,51 +2,75 @@ import 'package:flutter/material.dart';
 
 class PrimaryButton extends StatelessWidget {
   final String label;
-  final VoidCallback? onPressed;
   final bool isLoading;
   final IconData? icon;
+  final Future<void> Function()? onPressed;
 
   const PrimaryButton({
     super.key,
     required this.label,
+    required this.isLoading,
     required this.onPressed,
-    this.isLoading = false,
     this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
-    const accent = Color(0xFFFF5A52);
-
     return SizedBox(
       width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: isLoading ? null : onPressed,
+      height: 54,
+      child: ElevatedButton(
+        onPressed: isLoading
+            ? null
+            : () async {
+                debugPrint('🔥 PrimaryButton tapped');
+                if (onPressed != null) {
+                  await onPressed!();
+                }
+              },
         style: ElevatedButton.styleFrom(
-          backgroundColor: accent,
+          backgroundColor: const Color(0xFFFF5A52),
           foregroundColor: Colors.white,
-          disabledBackgroundColor: accent.withOpacity(0.7),
-          minimumSize: const Size.fromHeight(56),
+          elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
           ),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         ),
-        icon: isLoading
-            ? const SizedBox(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (isLoading) ...[
+              const SizedBox(
                 width: 18,
                 height: 18,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2,
+                  strokeWidth: 2.2,
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
-              )
-            : Icon(icon ?? Icons.arrow_forward),
-        label: Text(
-          isLoading ? 'Loading...' : label,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-          ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Loading...',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ] else ...[
+              if (icon != null) ...[
+                Icon(icon, size: 18),
+                const SizedBox(width: 10),
+              ],
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

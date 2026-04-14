@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 class GhostButton extends StatelessWidget {
   final String label;
-  final VoidCallback? onPressed;
   final IconData? icon;
+  final VoidCallback? onPressed;
 
   const GhostButton({
     super.key,
@@ -14,26 +14,44 @@ class GhostButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const accent = Color(0xFFFF5A52);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final borderColor =
+        isDark ? const Color(0xFF2A2A38) : const Color(0xFFD9DCE5);
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final bgColor = isDark ? const Color(0xFF171720) : const Color(0xFFF8F9FC);
 
     return SizedBox(
       width: double.infinity,
-      child: OutlinedButton.icon(
+      child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: accent),
+          backgroundColor: bgColor,
+          foregroundColor: textColor,
+          side: BorderSide(color: borderColor),
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
           ),
-          padding: const EdgeInsets.symmetric(vertical: 14),
         ),
-        icon: Icon(icon ?? Icons.refresh, color: accent),
-        label: Text(
-          label,
-          style: const TextStyle(
-            color: accent,
-            fontWeight: FontWeight.w700,
-          ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (icon != null) Icon(icon, size: 18),
+            if (icon != null) const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.1,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

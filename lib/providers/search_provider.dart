@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/search_session.dart';
@@ -10,6 +13,8 @@ class SearchProvider extends ChangeNotifier {
   final TextEditingController promptCtrl = TextEditingController();
 
   final List<SearchSession> sessions = [];
+  final Map<String, Map<String, dynamic>> _searchCache = {};
+
   int selectedIndex = 0;
   bool isLoading = false;
   bool isInitialized = false;
@@ -53,6 +58,15 @@ class SearchProvider extends ChangeNotifier {
     );
   }
 
+  String _buildCacheKey({
+    required String prompt,
+    required String location,
+    required double minPrice,
+    required double maxPrice,
+  }) {
+    return '${prompt.trim().toLowerCase()}|$location|${minPrice.round()}|${maxPrice.round()}';
+  }
+
   Future<void> _init() async {
     try {
       await loadSessionsFromFirestore();
@@ -65,7 +79,9 @@ class SearchProvider extends ChangeNotifier {
 
       selectedIndex = 0;
       promptCtrl.text = currentSession.prompt;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('⚠️ _init error: $e');
+
       if (sessions.isEmpty) {
         sessions.add(_buildDefaultSession());
       }
@@ -102,23 +118,32 @@ class SearchProvider extends ChangeNotifier {
         city = cities.first;
       }
 
-      sessions.add(
-        SearchSession(
-          id: (data['id'] ?? doc.id).toString(),
-          title: (data['title'] ?? 'New search').toString(),
-          prompt: (data['prompt'] ?? '').toString(),
-          aiResult: data['aiResult'] is Map<String, dynamic>
-              ? Map<String, dynamic>.from(data['aiResult'] as Map)
-              : null,
-          aiError: data['aiError']?.toString(),
-          location: location,
-          city: city,
-          priceRange: RangeValues(
-            ((data['priceStart'] ?? 1) as num).toDouble(),
-            ((data['priceEnd'] ?? 500) as num).toDouble(),
-          ),
+      final aiResult = data['aiResult'];
+      final session = SearchSession(
+        id: (data['id'] ?? doc.id).toString(),
+        title: (data['title'] ?? 'New search').toString(),
+        prompt: (data['prompt'] ?? '').toString(),
+        aiResult: aiResult is Map ? Map<String, dynamic>.from(aiResult) : null,
+        aiError: data['aiError']?.toString(),
+        location: location,
+        city: city,
+        priceRange: RangeValues(
+          ((data['priceStart'] ?? 1) as num).toDouble(),
+          ((data['priceEnd'] ?? 500) as num).toDouble(),
         ),
       );
+
+      sessions.add(session);
+
+      if (session.aiResult != null) {
+        final cacheKey = _buildCacheKey(
+          prompt: session.prompt,
+          location: session.location,
+          minPrice: session.priceRange.start,
+          maxPrice: session.priceRange.end,
+        );
+        _searchCache[cacheKey] = Map<String, dynamic>.from(session.aiResult!);
+      }
     }
   }
 
@@ -169,39 +194,37 @@ class SearchProvider extends ChangeNotifier {
     }, SetOptions(merge: true));
   }
 
-Future<void> _logSearchAnalytics(String prompt) async {
-  final uid = _uid;
-  if (uid == null) return;
+  Future<void> _logSearchAnalytics(String prompt) async {
+    final uid = _uid;
+    if (uid == null) return;
 
-  await FirebaseFirestore.instance
-      .collection('users')
-      .doc(uid)
-      .collection('analytics')
-      .add({
-    'prompt': prompt,
-    'location': currentSession.location,
-    'city': currentSession.city,
-    'priceStart': currentSession.priceRange.start,
-    'priceEnd': currentSession.priceRange.end,
-    'createdAt': FieldValue.serverTimestamp(),
-  });
-}
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('analytics')
+        .add({
+      'prompt': prompt,
+      'location': currentSession.location,
+      'city': currentSession.city,
+      'priceStart': currentSession.priceRange.start,
+      'priceEnd': currentSession.priceRange.end,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
 
+  Future<void> saveFavoriteProduct(Map<String, dynamic> product) async {
+    final uid = _uid;
+    if (uid == null) return;
 
-Future<void> saveFavoriteProduct(Map<String, dynamic> product) async {
-  final uid = _uid;
-  if (uid == null) return;
-
-  await FirebaseFirestore.instance
-      .collection('users')
-      .doc(uid)
-      .collection('favorites')
-      .add({
-    ...product,
-    'savedAt': FieldValue.serverTimestamp(),
-  });
-}
-
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('favorites')
+        .add({
+      ...product,
+      'savedAt': FieldValue.serverTimestamp(),
+    });
+  }
 
   Future<void> createNewSession() async {
     final newSession = _buildDefaultSession();
@@ -212,7 +235,11 @@ Future<void> saveFavoriteProduct(Map<String, dynamic> product) async {
     isLoading = false;
     notifyListeners();
 
-    await _createSessionInFirestore(newSession);
+    try {
+      await _createSessionInFirestore(newSession);
+    } catch (e) {
+      debugPrint('⚠️ createNewSession firestore error: $e');
+    }
   }
 
   void selectSession(int index) {
@@ -233,12 +260,15 @@ Future<void> saveFavoriteProduct(Map<String, dynamic> product) async {
 
   Future<void> updateLocation(String value) async {
     currentSession.location = value;
-
     final cities = LocationUtils.countryCities[value] ?? ['Accra'];
     currentSession.city = cities.first;
-
     notifyListeners();
-    await _updateSessionInFirestore(currentSession);
+
+    try {
+      await _updateSessionInFirestore(currentSession);
+    } catch (e) {
+      debugPrint('⚠️ updateLocation firestore error: $e');
+    }
   }
 
   Future<void> updateCity(String value) async {
@@ -246,60 +276,160 @@ Future<void> saveFavoriteProduct(Map<String, dynamic> product) async {
         LocationUtils.countryCities[currentSession.location] ?? ['Accra'];
 
     currentSession.city = cities.contains(value) ? value : cities.first;
-
     notifyListeners();
-    await _updateSessionInFirestore(currentSession);
+
+    try {
+      await _updateSessionInFirestore(currentSession);
+    } catch (e) {
+      debugPrint('⚠️ updateCity firestore error: $e');
+    }
   }
 
   Future<void> updatePriceRange(RangeValues value) async {
     currentSession.priceRange = value;
     notifyListeners();
-    await _updateSessionInFirestore(currentSession);
+
+    try {
+      await _updateSessionInFirestore(currentSession);
+    } catch (e) {
+      debugPrint('⚠️ updatePriceRange firestore error: $e');
+    }
+  }
+
+  Future<void> deleteSession(int index) async {
+    if (index < 0 || index >= sessions.length) return;
+    if (sessions.length == 1) return;
+
+    final uid = _uid;
+    final sessionToDelete = sessions[index];
+
+    sessions.removeAt(index);
+
+    if (selectedIndex >= sessions.length) {
+      selectedIndex = sessions.length - 1;
+    } else if (selectedIndex > index) {
+      selectedIndex -= 1;
+    } else if (selectedIndex == index) {
+      selectedIndex = 0;
+    }
+
+    promptCtrl.text = sessions[selectedIndex].prompt;
+    notifyListeners();
+
+    if (uid != null) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('sessions')
+            .doc(sessionToDelete.id)
+            .delete();
+      } catch (e) {
+        debugPrint('⚠️ deleteSession firestore error: $e');
+      }
+    }
   }
 
   Future<void> submitPrompt() async {
     final text = promptCtrl.text.trim();
     if (text.isEmpty || isLoading) return;
 
-    await _logSearchAnalytics(text);
+    final session = currentSession;
 
-    currentSession.prompt = text;
-    currentSession.aiResult = null;
-    currentSession.aiError = null;
+    debugPrint('🚀 submitPrompt started');
+    debugPrint('📝 Prompt: $text');
+
+    final cacheKey = _buildCacheKey(
+      prompt: text,
+      location: session.location,
+      minPrice: session.priceRange.start,
+      maxPrice: session.priceRange.end,
+    );
+
+    if (_searchCache.containsKey(cacheKey)) {
+      debugPrint('⚡ Loaded result from cache');
+
+      session.prompt = text;
+      session.aiResult = Map<String, dynamic>.from(_searchCache[cacheKey]!);
+      session.aiError = null;
+
+      if (session.title == 'New search') {
+        session.title = text.length > 28 ? '${text.substring(0, 28)}...' : text;
+      }
+
+      promptCtrl.text = text;
+      notifyListeners();
+      unawaited(_safeUpdateSession(session));
+      return;
+    }
+
+    session.prompt = text;
+    session.aiResult = null;
+    session.aiError = null;
     isLoading = true;
 
-    if (currentSession.title == 'New search') {
-      currentSession.title =
-          text.length > 28 ? '${text.substring(0, 28)}...' : text;
+    if (session.title == 'New search') {
+      session.title = text.length > 28 ? '${text.substring(0, 28)}...' : text;
     }
 
     notifyListeners();
-    await _updateSessionInFirestore(currentSession);
+
+    unawaited(_safeUpdateSession(session));
+    unawaited(_safeLogAnalytics(text));
 
     try {
+      debugPrint('📡 Calling API...');
+
       final response = await ApiService.getRecommendation(
         text,
-        location: currentSession.location,
-        minPrice: currentSession.priceRange.start,
-        maxPrice: currentSession.priceRange.end,
-      );
+        location: session.location,
+        minPrice: session.priceRange.start,
+        maxPrice: session.priceRange.end,
+      ).timeout(const Duration(seconds: 35));
 
-      final result = response['result'];
+      debugPrint('✅ Raw API response: $response');
 
-      if (result is Map<String, dynamic>) {
-        currentSession.aiResult = Map<String, dynamic>.from(result);
-        currentSession.aiError = null;
+      final dynamic resultData = response['result'] ?? response;
+
+      if (resultData is Map) {
+        final cleanResult = Map<String, dynamic>.from(resultData);
+        session.aiResult = cleanResult;
+        session.aiError = null;
+        _searchCache[cacheKey] = cleanResult;
       } else {
-        currentSession.aiResult = null;
-        currentSession.aiError = 'Invalid response format';
+        session.aiResult = null;
+        session.aiError = 'Invalid response format from backend';
       }
+    } on TimeoutException {
+      session.aiResult = null;
+      session.aiError =
+          'Request timed out. Check backend server or internet connection.';
+      debugPrint('❌ API timeout');
     } catch (e) {
-      currentSession.aiResult = null;
-      currentSession.aiError = e.toString().replaceFirst('Exception: ', '');
+      session.aiResult = null;
+      session.aiError = e.toString().replaceFirst('Exception: ', '');
+      debugPrint('❌ submitPrompt error: $e');
     } finally {
       isLoading = false;
       notifyListeners();
-      await _updateSessionInFirestore(currentSession);
+      await _safeUpdateSession(session);
+      debugPrint('✅ submitPrompt finished');
+    }
+  }
+
+  Future<void> _safeUpdateSession(SearchSession session) async {
+    try {
+      await _updateSessionInFirestore(session);
+    } catch (e) {
+      debugPrint('⚠️ _safeUpdateSession error: $e');
+    }
+  }
+
+  Future<void> _safeLogAnalytics(String prompt) async {
+    try {
+      await _logSearchAnalytics(prompt);
+    } catch (e) {
+      debugPrint('⚠️ _safeLogAnalytics error: $e');
     }
   }
 

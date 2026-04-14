@@ -84,6 +84,7 @@ if (user == null) {
             backgroundColor: sidebarBg,
             child: SafeArea(
               child: _SidebarContent(
+                onDeleteSession: searchProvider.deleteSession,
                 onNewSearch: () {
                   if (Navigator.canPop(context)) {
                     Navigator.pop(context);
@@ -128,6 +129,7 @@ if (user == null) {
                 ),
               ),
               child: _SidebarContent(
+                onDeleteSession: searchProvider.deleteSession,
                 onNewSearch: searchProvider.createNewSession,
                 fullName: fullName,
                 email: email,
@@ -451,63 +453,64 @@ SizedBox(
     );
   }
 
-  Widget _actionTile({
-    required String title,
-    required String subtitle,
-    required Color bg,
-    required Color border,
-    required Color titleColor,
-    required Color subColor,
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: border),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: const Color(0xFFFF5A52)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    softWrap: true,
-                    style: TextStyle(
-                      color: titleColor,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    softWrap: true,
-                    style: TextStyle(
-                      color: subColor,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right, color: subColor),
-          ],
-        ),
+ Widget _actionTile({
+  required String title,
+  required String subtitle,
+  required Color bg,
+  required Color border,
+  required Color titleColor,
+  required Color subColor,
+  required IconData icon,
+  required VoidCallback onTap,
+}) {
+  return InkWell(
+    borderRadius: BorderRadius.circular(16),
+    onTap: onTap,
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
       ),
-    );
-  }
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFFFF5A52)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  softWrap: true,
+                  style: TextStyle(
+                    color: titleColor,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  softWrap: true,
+                  style: TextStyle(
+                    color: subColor,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_right, color: subColor),
+        ],
+      ),
+    ),
+  );
 }
+}
+
 
 class _SidebarContent extends StatelessWidget {
   final String fullName;
@@ -515,26 +518,28 @@ class _SidebarContent extends StatelessWidget {
   final List<String> history;
   final int selectedIndex;
   final ValueChanged<int> onSelect;
-  final VoidCallback onOpenSettings;
-  final VoidCallback onNewSearch;
+ final VoidCallback onOpenSettings;
+final VoidCallback onNewSearch;
+final Future<void> Function(int) onDeleteSession;
   final Color panelBg;
   final Color borderColor;
   final Color titleColor;
   final Color subColor;
 
   const _SidebarContent({
-    required this.fullName,
-    required this.email,
-    required this.history,
-    required this.selectedIndex,
-    required this.onSelect,
-    required this.onOpenSettings,
-    required this.onNewSearch,
-    required this.panelBg,
-    required this.borderColor,
-    required this.titleColor,
-    required this.subColor,
-  });
+  required this.fullName,
+  required this.email,
+  required this.history,
+  required this.selectedIndex,
+  required this.onSelect,
+  required this.onOpenSettings,
+  required this.onNewSearch,
+  required this.onDeleteSession,
+  required this.panelBg,
+  required this.borderColor,
+  required this.titleColor,
+  required this.subColor,
+});
 
   @override
   Widget build(BuildContext context) {
@@ -590,6 +595,17 @@ class _SidebarContent extends StatelessWidget {
             ),
           ),
         ),
+
+        Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 16),
+  child: Text(
+    'Long press a search to delete it',
+    style: TextStyle(
+      color: subColor,
+      fontSize: 12,
+    ),
+  ),
+),
         const SizedBox(height: 16),
         Expanded(
           child: ListView.separated(
@@ -597,49 +613,79 @@ class _SidebarContent extends StatelessWidget {
             itemCount: history.length,
             separatorBuilder: (_, _) => const SizedBox(height: 6),
             itemBuilder: (context, index) {
-              final active = index == selectedIndex;
-              return InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: () => onSelect(index),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 14,
-                  ),
-                  decoration: BoxDecoration(
-                    color: active ? panelBg : Colors.transparent,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: active ? borderColor : Colors.transparent,
-                    ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.folder_open_outlined,
-                        color: subColor,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          history[index],
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: titleColor,
-                            fontSize: 15,
-                            fontWeight:
-                                active ? FontWeight.w700 : FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
+  final active = index == selectedIndex;
+
+  return InkWell(
+  borderRadius: BorderRadius.circular(14),
+  onTap: () => onSelect(index),
+  onLongPress: () async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete search'),
+          content: Text('Do you want to delete "${history[index]}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete == true) {
+      await onDeleteSession(index);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Search deleted')),
+        );
+      }
+    }
+  },
+  child: Container(
+    padding: const EdgeInsets.symmetric(
+      horizontal: 14,
+      vertical: 14,
+    ),
+    decoration: BoxDecoration(
+      color: active ? panelBg : Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(
+        color: active ? borderColor : Colors.transparent,
+      ),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          Icons.folder_open_outlined,
+          color: subColor,
+          size: 20,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            history[index],
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: titleColor,
+              fontSize: 15,
+              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+);},
           ),
         ),
         Container(
@@ -736,9 +782,9 @@ class _MainArea extends StatelessWidget {
   final String currencySymbol;
   final RangeValues selectedPriceRange;
 
-final ValueChanged<String> onLocationChanged;
-final ValueChanged<String> onCityChanged;
-final ValueChanged<RangeValues> onPriceRangeChanged;
+  final ValueChanged<String> onLocationChanged;
+  final ValueChanged<String> onCityChanged;
+  final ValueChanged<RangeValues> onPriceRangeChanged;
 
   const _MainArea({
     required this.fullName,
@@ -762,7 +808,7 @@ final ValueChanged<RangeValues> onPriceRangeChanged;
   });
 
   Future<void> _openProductUrl(String? url) async {
-    if (url == null || url.isEmpty) return;
+    if (url == null || url.trim().isEmpty) return;
 
     final uri = Uri.tryParse(url);
     if (uri == null) return;
@@ -770,6 +816,39 @@ final ValueChanged<RangeValues> onPriceRangeChanged;
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
+  }
+
+  List<Map<String, dynamic>> _extractProducts() {
+    if (aiResult == null) return [];
+
+    final raw = aiResult!['products'];
+    if (raw is! List) return [];
+
+    return raw
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Map<String, dynamic>? _extractBestProduct() {
+    if (aiResult == null) return null;
+
+    final raw = aiResult!['bestProduct'];
+    if (raw is Map) {
+      return Map<String, dynamic>.from(raw);
+    }
+    return null;
+  }
+
+  String _textValue(dynamic value, {String fallback = '-'}) {
+    if (value == null) return fallback;
+    final text = value.toString().trim();
+    return text.isEmpty ? fallback : text;
+  }
+
+  String _priceValue(dynamic value) {
+    if (value == null) return 'Price unavailable';
+    return '$currencySymbol$value';
   }
 
   @override
@@ -781,7 +860,8 @@ final ValueChanged<RangeValues> onPriceRangeChanged;
     final availableCities =
         LocationUtils.countryCities[selectedLocation] ?? ['Accra'];
 
-        final currency = currencySymbol;
+    final products = _extractProducts();
+    final bestProduct = _extractBestProduct();
 
     return Column(
       children: [
@@ -837,29 +917,56 @@ final ValueChanged<RangeValues> onPriceRangeChanged;
                       softWrap: true,
                       style: TextStyle(
                         color: titleColor,
-                        fontSize: isSmallScreen ? 28 : 36,
+                        fontSize: isSmallScreen ? 30 : 40,
                         fontWeight: FontWeight.w800,
-                        height: 1.15,
+                        height: 1.1,
+                        letterSpacing: -0.5,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Text(
                       AppStrings.t(context, 'home_subtitle'),
                       softWrap: true,
                       style: TextStyle(
                         color: subColor,
-                        fontSize: isSmallScreen ? 16 : 17,
-                        height: 1.5,
+                        fontSize: isSmallScreen ? 15 : 17,
+                        height: 1.6,
                       ),
                     ),
-                    const SizedBox(height: 26),
+                    const SizedBox(height: 24),
+
                     Container(
                       width: double.infinity,
-                      padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+                      padding: EdgeInsets.all(isSmallScreen ? 18 : 24),
                       decoration: BoxDecoration(
-                        color: panelBg,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: borderColor),
+                        gradient: Theme.of(context).brightness == Brightness.dark
+                            ? const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Color(0xFF15151D),
+                                  Color(0xFF12121A),
+                                ],
+                              )
+                            : const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Color(0xFFFFFFFF),
+                                  Color(0xFFF9FAFD),
+                                ],
+                              ),
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(
+                          color: borderColor.withValues(alpha: 0.7),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -887,6 +994,7 @@ final ValueChanged<RangeValues> onPriceRangeChanged;
                             ],
                           ),
                           const SizedBox(height: 16),
+
                           TextField(
                             controller: promptCtrl,
                             maxLines: 6,
@@ -899,19 +1007,24 @@ final ValueChanged<RangeValues> onPriceRangeChanged;
                                 fontSize: isSmallScreen ? 15 : 16,
                               ),
                               filled: true,
-                              fillColor: panelBg,
+                              fillColor: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? const Color(0xFF171720)
+                                  : const Color(0xFFF8F9FC),
                               enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                borderSide: BorderSide(color: borderColor),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                borderSide: const BorderSide(
-                                  color: accent,
-                                  width: 1.3,
+                                borderRadius: BorderRadius.circular(20),
+                                borderSide: BorderSide(
+                                  color: borderColor.withValues(alpha: 0.8),
                                 ),
                               ),
-                              contentPadding: const EdgeInsets.all(18),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(20),
+                                borderSide: const BorderSide(
+                                  color: accent,
+                                  width: 1.5,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.all(20),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -922,16 +1035,23 @@ final ValueChanged<RangeValues> onPriceRangeChanged;
                               color: titleColor,
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
                             ),
                           ),
                           const SizedBox(height: 8),
+
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.symmetric(horizontal: 14),
                             decoration: BoxDecoration(
-                              color: panelBg,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: borderColor),
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? const Color(0xFF171720)
+                                  : const Color(0xFFF8F9FC),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: borderColor.withValues(alpha: 0.8),
+                              ),
                             ),
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<String>(
@@ -957,11 +1077,9 @@ final ValueChanged<RangeValues> onPriceRangeChanged;
                                     child: Text('United States'),
                                   ),
                                 ],
-                               onChanged: (value) {
-  if (value != null) {
-    onLocationChanged(value);
-  }
-},
+                                onChanged: (value) {
+                                  if (value != null) onLocationChanged(value);
+                                },
                               ),
                             ),
                           ),
@@ -977,13 +1095,19 @@ final ValueChanged<RangeValues> onPriceRangeChanged;
                             ),
                           ),
                           const SizedBox(height: 8),
+
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.symmetric(horizontal: 14),
                             decoration: BoxDecoration(
-                              color: panelBg,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: borderColor),
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? const Color(0xFF171720)
+                                  : const Color(0xFFF8F9FC),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: borderColor.withValues(alpha: 0.8),
+                              ),
                             ),
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<String>(
@@ -1006,9 +1130,7 @@ final ValueChanged<RangeValues> onPriceRangeChanged;
                                     )
                                     .toList(),
                                 onChanged: (value) {
-                                  if (value != null) {
-                                    onCityChanged(value);
-                                  }
+                                  if (value != null) onCityChanged(value);
                                 },
                               ),
                             ),
@@ -1024,16 +1146,17 @@ final ValueChanged<RangeValues> onPriceRangeChanged;
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          
                           const SizedBox(height: 6),
 
-                            Text(
-                              '$currency${selectedPriceRange.start.round()} - $currency${selectedPriceRange.end.round()}',
-                              style: TextStyle(
-                                color: subColor,
-                                fontSize: 13,
-                              ),
+                          Text(
+                            '$currencySymbol${selectedPriceRange.start.round()} - $currencySymbol${selectedPriceRange.end.round()}',
+                            style: TextStyle(
+                              color: subColor,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
                             ),
+                          ),
 
                           RangeSlider(
                             values: selectedPriceRange,
@@ -1041,15 +1164,14 @@ final ValueChanged<RangeValues> onPriceRangeChanged;
                             max: 1000,
                             divisions: 20,
                             labels: RangeLabels(
-                            '$currency${selectedPriceRange.start.round()}',
-                            '$currency${selectedPriceRange.end.round()}',
-                          ),
-                            onChanged: (value) {
-                              onPriceRangeChanged(value);
-                            },
+                              '$currencySymbol${selectedPriceRange.start.round()}',
+                              '$currencySymbol${selectedPriceRange.end.round()}',
+                            ),
+                            onChanged: onPriceRangeChanged,
                           ),
 
-                         const SizedBox(height: 16),
+                          const SizedBox(height: 16),
+
                           PrimaryButton(
                             label: AppStrings.t(context, 'find_best_options'),
                             isLoading: isLoading,
@@ -1057,469 +1179,126 @@ final ValueChanged<RangeValues> onPriceRangeChanged;
                             onPressed: onSubmit,
                           ),
 
-const SizedBox(height: 18),
+                          const SizedBox(height: 18),
 
-AnimatedSwitcher(
-  duration: const Duration(milliseconds: 350),
-  switchInCurve: Curves.easeOut,
-  switchOutCurve: Curves.easeIn,
-  child: isLoading
-      ? Column(
-          key: const ValueKey('loading'),
-          children: const [
-            SkeletonCard(),
-            SkeletonCard(),
-            SkeletonCard(),
-          ],
-        )
-      : aiError != null
-          ? Container(
-              key: const ValueKey('error'),
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: panelBg,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.redAccent),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    aiError!,
-                    style: const TextStyle(
-                      color: Colors.redAccent,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  GhostButton(
-                    label: 'Retry',
-                    icon: Icons.refresh,
-                    onPressed: isLoading
-                        ? null
-                        : () => context.read<SearchProvider>().retrySearch(),
-                  ),
-                ],
-              ),
-            )
-          : aiResult == null
-              ? Container(
-                  key: const ValueKey('empty'),
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: panelBg,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: borderColor),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.shopping_bag_outlined,
-                        size: 36,
-                        color: subColor,
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Start a search to get smart product recommendations.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: subColor,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : Container(
-                  key: const ValueKey('results'),
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: panelBg,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: borderColor),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'AI Recommendation',
-                        style: TextStyle(
-                          color: titleColor,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      _resultRow(
-                        'Category',
-                        aiResult!['category']?.toString() ?? '-',
-                        titleColor,
-                        subColor,
-                      ),
-                      _resultRow(
-                        'Budget',
-                        aiResult!['budget'] != null
-                            ? '$currency${aiResult!['budget']}'
-                            : '-',
-                        titleColor,
-                        subColor,
-                      ),
-                      _resultRow(
-                        'Priorities',
-                        (aiResult!['priorities'] as List?)?.join(', ') ?? '-',
-                        titleColor,
-                        subColor,
-                      ),
-                      _resultRow(
-                        'Summary',
-                        aiResult!['summary']?.toString() ?? '-',
-                        titleColor,
-                        subColor,
-                      ),
-
-                      if (aiResult!['bestProduct'] != null) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          'Best Pick',
-                          style: TextStyle(
-                            color: titleColor,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: panelBg,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: const Color(0xFFFF5A52),
-                              width: 1.2,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 42,
-                                    height: 42,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFF5A52)
-                                          .withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Icon(
-                                      Icons.workspace_premium_outlined,
-                                      color: Color(0xFFFF5A52),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      aiResult!['bestProduct']['name']
-                                              ?.toString() ??
-                                          '-',
-                                      style: TextStyle(
-                                        color: titleColor,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                aiResult!['bestProduct']['reason']
-                                        ?.toString() ??
-                                    '',
-                                style: TextStyle(
-                                  color: subColor,
-                                  fontSize: 14,
-                                  height: 1.45,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-
-                      if ((aiResult!['products'] as List?) != null &&
-                          (aiResult!['products'] as List).isNotEmpty) ...[
-                        const SizedBox(height: 18),
-                        Text(
-                          'Fetched Items',
-                          style: TextStyle(
-                            color: titleColor,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        ...(aiResult!['products'] as List).map((item) {
-                          final product = item as Map<String, dynamic>;
-                          final imageUrl = product['image']?.toString() ?? '';
-                          final productUrl = product['url']?.toString() ?? '';
-                          final rating = product['rating'];
-                          final price = product['price'];
-
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 14),
-                            child: Container(
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                color: panelBg,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: borderColor),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.04),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(14),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        ClipRRect(
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 350),
+                            switchInCurve: Curves.easeOut,
+                            switchOutCurve: Curves.easeIn,
+                            child: isLoading
+                                ? Column(
+                                    key: const ValueKey('loading'),
+                                    children: const [
+                                      SkeletonCard(),
+                                      SkeletonCard(),
+                                      SkeletonCard(),
+                                    ],
+                                  )
+                                : aiError != null
+                                    ? Container(
+                                        key: const ValueKey('error'),
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: panelBg,
                                           borderRadius:
-                                              BorderRadius.circular(14),
-                                          child: imageUrl.isNotEmpty
-                                              ? Image.network(
-                                                  imageUrl,
-                                                  width: 86,
-                                                  height: 86,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (
-                                                    context,
-                                                    error,
-                                                    stackTrace,
-                                                  ) =>
-                                                      Container(
-                                                    width: 86,
-                                                    height: 86,
-                                                    decoration: BoxDecoration(
-                                                      color: const Color(
-                                                        0xFFFF5A52,
-                                                      ).withValues(alpha: 0.12),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                        14,
-                                                      ),
-                                                    ),
-                                                    child: const Icon(
-                                                      Icons
-                                                          .image_not_supported_outlined,
-                                                      color: Color(0xFFFF5A52),
-                                                    ),
-                                                  ),
-                                                )
-                                              : Container(
-                                                  width: 86,
-                                                  height: 86,
+                                              BorderRadius.circular(18),
+                                          border: Border.all(
+                                            color: Colors.redAccent,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              aiError!,
+                                              style: const TextStyle(
+                                                color: Colors.redAccent,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                            GhostButton(
+                                              label: 'Retry',
+                                              icon: Icons.refresh,
+                                              onPressed: () => context
+                                                  .read<SearchProvider>()
+                                                  .retrySearch(),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    : aiResult == null
+                                        ? Container(
+                                            key: const ValueKey('empty'),
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.all(28),
+                                            decoration: BoxDecoration(
+                                              color: panelBg,
+                                              borderRadius:
+                                                  BorderRadius.circular(24),
+                                              border:
+                                                  Border.all(color: borderColor),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withValues(alpha: 0.03),
+                                                  blurRadius: 16,
+                                                  offset: const Offset(0, 6),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Column(
+                                              children: [
+                                                Container(
+                                                  width: 68,
+                                                  height: 68,
                                                   decoration: BoxDecoration(
                                                     color: const Color(
                                                       0xFFFF5A52,
-                                                    ).withValues(alpha: 0.12),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                      14,
-                                                    ),
+                                                    ).withValues(alpha: 0.10),
+                                                    shape: BoxShape.circle,
                                                   ),
                                                   child: const Icon(
                                                     Icons.shopping_bag_outlined,
+                                                    size: 32,
                                                     color: Color(0xFFFF5A52),
-                                                    size: 30,
                                                   ),
                                                 ),
-                                        ),
-                                        const SizedBox(width: 14),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                product['name']?.toString() ??
-                                                    '-',
-                                                style: TextStyle(
-                                                  color: titleColor,
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w700,
-                                                  height: 1.35,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 8),
-                                              Wrap(
-                                                spacing: 8,
-                                                runSpacing: 8,
-                                                children: [
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(
-                                                      horizontal: 10,
-                                                      vertical: 6,
-                                                    ),
-                                                    decoration: BoxDecoration(
-                                                      color: const Color(
-                                                        0xFFFF5A52,
-                                                      ).withValues(alpha: 0.10),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                        999,
-                                                      ),
-                                                    ),
-                                                    child: Text(
-                                                      price != null
-                                                          ? '$currency$price'
-                                                          : 'Price unavailable',
-                                                      style: const TextStyle(
-                                                        color:
-                                                            Color(0xFFFF5A52),
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                        fontSize: 12,
-                                                      ),
-                                                    ),
+                                                const SizedBox(height: 14),
+                                                Text(
+                                                  'Start a search',
+                                                  style: TextStyle(
+                                                    color: titleColor,
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.w700,
                                                   ),
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(
-                                                      horizontal: 10,
-                                                      vertical: 6,
-                                                    ),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.amber
-                                                          .withValues(
-                                                        alpha: 0.12,
-                                                      ),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                        999,
-                                                      ),
-                                                    ),
-                                                    child: Text(
-                                                      rating != null
-                                                          ? '⭐ $rating'
-                                                          : 'No rating',
-                                                      style: const TextStyle(
-                                                        color: Colors.amber,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                        fontSize: 12,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 8),
-                                              Text(
-                                                'Sold by ${product['store'] ?? 'Unknown store'}',
-                                                style: TextStyle(
-                                                  color: subColor,
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w500,
                                                 ),
-                                              ),
-                                            ],
+                                                const SizedBox(height: 8),
+                                                Text(
+                                                  'Describe what you want and ClawCart will suggest the best options for you.',
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    color: subColor,
+                                                    fontSize: 14,
+                                                    height: 1.5,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          )
+                                        : _ResultsSection(
+                                            aiResult: aiResult!,
+                                            panelBg: panelBg,
+                                            borderColor: borderColor,
+                                            titleColor: titleColor,
+                                            subColor: subColor,
+                                            currencySymbol: currencySymbol,
+                                            onOpenProductUrl: _openProductUrl,
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 14),
-                                    Text(
-                                      product['reason']?.toString() ?? '',
-                                      style: TextStyle(
-                                        color: subColor,
-                                        fontSize: 13,
-                                        height: 1.45,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 14),
-                                    Row(
-  children: [
-    Expanded(
-      child: GhostButton(
-        label: 'Save',
-        icon: Icons.favorite_border,
-        onPressed: () async {
-          await context.read<SearchProvider>().saveFavoriteProduct(product);
-
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Saved to favorites')),
-            );
-          }
-        },
-      ),
-    ),
-    const SizedBox(width: 10),
-    Expanded(
-      child: OutlinedButton.icon(
-        onPressed: productUrl.isNotEmpty
-            ? () => _openProductUrl(productUrl)
-            : null,
-        style: OutlinedButton.styleFrom(
-          side: BorderSide(color: borderColor),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-        ),
-        icon: const Icon(Icons.open_in_new, size: 18),
-        label: const Text(
-          'View product',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
-      ),
-    ),
-    const SizedBox(width: 10),
-    Expanded(
-      child: ElevatedButton.icon(
-        onPressed: productUrl.isNotEmpty
-            ? () => _openProductUrl(productUrl)
-            : null,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFFF5A52),
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-        ),
-        icon: const Icon(Icons.shopping_cart_checkout, size: 18),
-        label: const Text(
-          'Buy now',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
-      ),
-    ),
-  ],
-),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        }),
-                      ],
-                    ],
-                  ),
-                ),
-),
+                          ),
                         ],
                       ),
                     ),
@@ -1564,9 +1343,444 @@ AnimatedSwitcher(
   }
 }
 
-                         
+class _ResultsSection extends StatelessWidget {
+  final Map<String, dynamic> aiResult;
+  final Color panelBg;
+  final Color borderColor;
+  final Color titleColor;
+  final Color subColor;
+  final String currencySymbol;
+  final Future<void> Function(String? url) onOpenProductUrl;
 
-                          
+  const _ResultsSection({
+    required this.aiResult,
+    required this.panelBg,
+    required this.borderColor,
+    required this.titleColor,
+    required this.subColor,
+    required this.currencySymbol,
+    required this.onOpenProductUrl,
+  });
+
+  List<Map<String, dynamic>> get products {
+    final raw = aiResult['products'];
+    if (raw is! List) return [];
+
+    return raw
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Map<String, dynamic>? get bestProduct {
+    final raw = aiResult['bestProduct'];
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    return null;
+  }
+
+  String _safeText(dynamic value, {String fallback = '-'}) {
+    if (value == null) return fallback;
+    final text = value.toString().trim();
+    return text.isEmpty ? fallback : text;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('results'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: panelBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'AI Recommendation',
+            style: TextStyle(
+              color: titleColor,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          _resultRow(
+            'Category',
+            _safeText(aiResult['category']),
+          ),
+          _resultRow(
+            'Budget',
+            aiResult['budget'] != null
+                ? '$currencySymbol${aiResult['budget']}'
+                : '-',
+          ),
+          _resultRow(
+            'Priorities',
+            aiResult['priorities'] is List
+                ? (aiResult['priorities'] as List).join(', ')
+                : '-',
+          ),
+          _resultRow(
+            'Summary',
+            _safeText(aiResult['summary']),
+          ),
+
+          if (bestProduct != null) ...[
+            const SizedBox(height: 16),
+            Text(
+              'Best Pick',
+              style: TextStyle(
+                color: titleColor,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: panelBg,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: const Color(0xFFFF5A52),
+                  width: 1.2,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF5A52).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.workspace_premium_outlined,
+                          color: Color(0xFFFF5A52),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _safeText(bestProduct!['name']),
+                          style: TextStyle(
+                            color: titleColor,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _safeText(bestProduct!['reason'], fallback: ''),
+                    style: TextStyle(
+                      color: subColor,
+                      fontSize: 14,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          if (products.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Text(
+              'Fetched Items',
+              style: TextStyle(
+                color: titleColor,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            ...products.map((product) {
+              final imageUrl = _safeText(product['image'], fallback: '');
+              final productUrl = _safeText(product['url'], fallback: '');
+              final rating = product['rating'];
+              final price = product['price'];
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: panelBg,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: borderColor.withValues(alpha: 0.8),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: imageUrl.isNotEmpty
+                                  ? Image.network(
+                                      imageUrl,
+                                      width: 92,
+                                      height: 92,
+                                      fit: BoxFit.cover,
+                                      errorBuilder:
+                                          (context, error, stackTrace) =>
+                                              _fallbackImage(),
+                                    )
+                                  : _fallbackImage(),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _safeText(product['name']),
+                                    style: TextStyle(
+                                      color: titleColor,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFF5A52)
+                                              .withValues(alpha: 0.10),
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                        ),
+                                        child: Text(
+                                          price != null
+                                              ? '$currencySymbol$price'
+                                              : 'Price unavailable',
+                                          style: const TextStyle(
+                                            color: Color(0xFFFF5A52),
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.amber
+                                              .withValues(alpha: 0.12),
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                        ),
+                                        child: Text(
+                                          rating != null
+                                              ? '⭐ $rating'
+                                              : 'No rating',
+                                          style: const TextStyle(
+                                            color: Colors.amber,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Sold by ${_safeText(product['store'], fallback: 'Unknown store')}',
+                                    style: TextStyle(
+                                      color: subColor,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          _safeText(product['reason'], fallback: ''),
+                          style: TextStyle(
+                            color: subColor,
+                            fontSize: 13,
+                            height: 1.45,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: GhostButton(
+                                label: 'Save',
+                                icon: Icons.favorite_border,
+                                onPressed: () async {
+                                  await context
+                                      .read<SearchProvider>()
+                                      .saveFavoriteProduct(product);
+
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Saved to favorites'),
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: productUrl.isNotEmpty
+                                    ? () => onOpenProductUrl(productUrl)
+                                    : null,
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(color: borderColor),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                ),
+                                icon: const Icon(Icons.open_in_new, size: 18),
+                                label: const Text(
+                                  'View product',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: productUrl.isNotEmpty
+                                    ? () => onOpenProductUrl(productUrl)
+                                    : null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFFF5A52),
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                ),
+                                icon: const Icon(
+                                  Icons.shopping_cart_checkout,
+                                  size: 18,
+                                ),
+                                label: const Text(
+                                  'Buy now',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+
+          if (products.isEmpty) ...[
+            const SizedBox(height: 18),
+            Text(
+              'No products found in the response.',
+              style: TextStyle(
+                color: subColor,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _resultRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: RichText(
+        text: TextSpan(
+          style: TextStyle(
+            color: subColor,
+            fontSize: 15,
+            height: 1.5,
+          ),
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: TextStyle(
+                color: titleColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            TextSpan(text: value),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _fallbackImage() {
+    return Container(
+      width: 92,
+      height: 92,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF5A52).withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: const Icon(
+        Icons.shopping_bag_outlined,
+        color: Color(0xFFFF5A52),
+        size: 30,
+      ),
+    );
+  }
+}
 
 class HelpPage extends StatelessWidget {
   const HelpPage({super.key});
@@ -1580,5 +1794,10 @@ class HelpPage extends StatelessWidget {
       ),
     );
   }
-} 
+}
+
+                         
+
+                          
+
 

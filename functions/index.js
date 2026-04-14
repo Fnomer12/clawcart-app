@@ -1,8 +1,14 @@
 require("dotenv").config();
 
-const functions = require("firebase-functions");
+const express = require("express");
+const cors = require("cors");
 const OpenAI = require("openai");
 const fetch = require("node-fetch");
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -89,7 +95,7 @@ async function searchProducts(query, location, minPrice, maxPrice) {
   const apiKey = process.env.SERPAPI_KEY;
 
   if (!apiKey) {
-    throw new Error("Missing SERPAPI_KEY in functions/.env");
+    throw new Error("Missing SERPAPI_KEY");
   }
 
   const { gl, hl, googleDomain } = getLocationConfig(location);
@@ -139,17 +145,6 @@ async function searchProducts(query, location, minPrice, maxPrice) {
   const shoppingResults = Array.isArray(data.shopping_results)
     ? data.shopping_results
     : [];
-
-  console.log(
-    "SERP SAMPLE:",
-    shoppingResults.slice(0, 2).map((item) => ({
-      title: item.title,
-      link: item.link,
-      product_link: item.product_link,
-      serpapi_link: item.serpapi_link,
-      inline_shopping_link: item.inline_shopping_link,
-    }))
-  );
 
   return shoppingResults.slice(0, 8).map(normalizeProduct);
 }
@@ -245,23 +240,15 @@ Rules:
   return parsed;
 }
 
-exports.recommend = functions.https.onRequest(async (req, res) => {
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "ClawCart backend is running",
+  });
+});
+
+app.post("/recommend", async (req, res) => {
   try {
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.set("Access-Control-Allow-Headers", "Content-Type");
-
-    if (req.method === "OPTIONS") {
-      return res.status(204).send("");
-    }
-
-    if (req.method !== "POST") {
-      return res.status(405).json({
-        success: false,
-        error: "Method not allowed",
-      });
-    }
-
     const { prompt, location, minPrice, maxPrice } = req.body || {};
 
     if (!prompt || !String(prompt).trim()) {
@@ -274,7 +261,7 @@ exports.recommend = functions.https.onRequest(async (req, res) => {
     if (!process.env.OPENAI_API_KEY) {
       return res.status(500).json({
         success: false,
-        error: "Missing OPENAI_API_KEY in functions/.env",
+        error: "Missing OPENAI_API_KEY",
       });
     }
 
@@ -357,4 +344,10 @@ exports.recommend = functions.https.onRequest(async (req, res) => {
       error: error?.message || "Unknown error",
     });
   }
+});
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`ClawCart backend running on port ${PORT}`);
 });
