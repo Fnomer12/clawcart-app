@@ -1,7 +1,7 @@
 {
   "name": "clawcart-backend",
   "version": "1.0.0",
-  "description": "ClawCart backend for product recommendations",
+  "description": "ClawCart backend",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"

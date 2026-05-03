@@ -35,30 +35,16 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  String _friendlyError(Object e) {
-    if (e is FirebaseAuthException) {
-      switch (e.code) {
-        case 'invalid-email':
-          return 'Please enter a valid email.';
-        case 'email-already-in-use':
-          return 'That email is already in use.';
-        case 'weak-password':
-          return 'Password must be at least 6 characters.';
-        case 'user-not-found':
-          return 'No account found with that email.';
-        case 'wrong-password':
-        case 'invalid-credential':
-          return 'Incorrect email or password.';
-        case 'network-request-failed':
-          return 'Network error. Check your internet.';
-        case 'too-many-requests':
-          return 'Too many attempts. Try again later.';
-        default:
-          return e.message ?? 'Something went wrong.';
-      }
-    }
-    return 'Something went wrong.';
+String _friendlyError(Object e) {
+  debugPrint('AUTH ERROR TYPE: ${e.runtimeType}');
+  debugPrint('AUTH ERROR: $e');
+
+  if (e is FirebaseAuthException) {
+    return '${e.code}: ${e.message ?? ''}';
   }
+
+  return e.toString();
+}
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;

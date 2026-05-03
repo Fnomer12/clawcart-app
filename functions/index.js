@@ -346,8 +346,9 @@ app.post("/recommend", async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 
-app.listen(PORT, () => {
-  console.log(`ClawCart backend running on port ${PORT}`);
+const server = app.listen(PORT, () => {
+  const actualPort = server.address().port;
+  console.log(`ClawCart backend running on port ${actualPort}`);
 });

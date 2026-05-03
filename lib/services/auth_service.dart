@@ -22,12 +22,17 @@ class AuthService {
     required String email,
     required String password,
   }) async {
+    if (name.trim().isEmpty) {
+      throw Exception('Please enter your full name.');
+    }
+
     final credential = await _auth.createUserWithEmailAndPassword(
       email: email.trim(),
       password: password.trim(),
     );
 
     final user = credential.user;
+
     if (user != null) {
       await user.updateDisplayName(name.trim());
 

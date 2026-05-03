@@ -818,38 +818,6 @@ class _MainArea extends StatelessWidget {
     }
   }
 
-  List<Map<String, dynamic>> _extractProducts() {
-    if (aiResult == null) return [];
-
-    final raw = aiResult!['products'];
-    if (raw is! List) return [];
-
-    return raw
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList();
-  }
-
-  Map<String, dynamic>? _extractBestProduct() {
-    if (aiResult == null) return null;
-
-    final raw = aiResult!['bestProduct'];
-    if (raw is Map) {
-      return Map<String, dynamic>.from(raw);
-    }
-    return null;
-  }
-
-  String _textValue(dynamic value, {String fallback = '-'}) {
-    if (value == null) return fallback;
-    final text = value.toString().trim();
-    return text.isEmpty ? fallback : text;
-  }
-
-  String _priceValue(dynamic value) {
-    if (value == null) return 'Price unavailable';
-    return '$currencySymbol$value';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -860,8 +828,7 @@ class _MainArea extends StatelessWidget {
     final availableCities =
         LocationUtils.countryCities[selectedLocation] ?? ['Accra'];
 
-    final products = _extractProducts();
-    final bestProduct = _extractBestProduct();
+   
 
     return Column(
       children: [
@@ -1343,7 +1310,7 @@ class _MainArea extends StatelessWidget {
   }
 }
 
-class _ResultsSection extends StatelessWidget {
+class _ResultsSection extends StatefulWidget {
   final Map<String, dynamic> aiResult;
   final Color panelBg;
   final Color borderColor;
@@ -1353,6 +1320,7 @@ class _ResultsSection extends StatelessWidget {
   final Future<void> Function(String? url) onOpenProductUrl;
 
   const _ResultsSection({
+    super.key,
     required this.aiResult,
     required this.panelBg,
     required this.borderColor,
@@ -1362,8 +1330,15 @@ class _ResultsSection extends StatelessWidget {
     required this.onOpenProductUrl,
   });
 
+  @override
+  State<_ResultsSection> createState() => _ResultsSectionState();
+}
+
+class _ResultsSectionState extends State<_ResultsSection> {
+  final Set<String> savedProducts = {};
+
   List<Map<String, dynamic>> get products {
-    final raw = aiResult['products'];
+    final raw = widget.aiResult['products'];
     if (raw is! List) return [];
 
     return raw
@@ -1373,7 +1348,7 @@ class _ResultsSection extends StatelessWidget {
   }
 
   Map<String, dynamic>? get bestProduct {
-    final raw = aiResult['bestProduct'];
+    final raw = widget.aiResult['bestProduct'];
     if (raw is Map) return Map<String, dynamic>.from(raw);
     return null;
   }
@@ -1386,6 +1361,12 @@ class _ResultsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final panelBg = widget.panelBg;
+    final borderColor = widget.borderColor;
+    final titleColor = widget.titleColor;
+    final subColor = widget.subColor;
+    final currencySymbol = widget.currencySymbol;
+
     return Container(
       key: const ValueKey('results'),
       width: double.infinity,
@@ -1407,27 +1388,20 @@ class _ResultsSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-
-          _resultRow(
-            'Category',
-            _safeText(aiResult['category']),
-          ),
+          _resultRow('Category', _safeText(widget.aiResult['category'])),
           _resultRow(
             'Budget',
-            aiResult['budget'] != null
-                ? '$currencySymbol${aiResult['budget']}'
+            widget.aiResult['budget'] != null
+                ? '$currencySymbol${widget.aiResult['budget']}'
                 : '-',
           ),
           _resultRow(
             'Priorities',
-            aiResult['priorities'] is List
-                ? (aiResult['priorities'] as List).join(', ')
+            widget.aiResult['priorities'] is List
+                ? (widget.aiResult['priorities'] as List).join(', ')
                 : '-',
           ),
-          _resultRow(
-            'Summary',
-            _safeText(aiResult['summary']),
-          ),
+          _resultRow('Summary', _safeText(widget.aiResult['summary'])),
 
           if (bestProduct != null) ...[
             const SizedBox(height: 16),
@@ -1512,11 +1486,19 @@ class _ResultsSection extends StatelessWidget {
               final productUrl = _safeText(product['url'], fallback: '');
               final rating = product['rating'];
               final price = product['price'];
+              final textMuted = subColor;
+              final productId =
+    (product['url']?.toString().trim().isNotEmpty ?? false)
+        ? product['url'].toString()
+        : _safeText(product['name']);
+
+final isSaved = savedProducts.contains(productId);
 
               return Padding(
-                padding: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.only(bottom: 16),
                 child: Container(
                   width: double.infinity,
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: panelBg,
                     borderRadius: BorderRadius.circular(24),
@@ -1531,194 +1513,227 @@ class _ResultsSection extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(14),
-                              child: imageUrl.isNotEmpty
-                                  ? Image.network(
-                                      imageUrl,
-                                      width: 92,
-                                      height: 92,
-                                      fit: BoxFit.cover,
-                                      errorBuilder:
-                                          (context, error, stackTrace) =>
-                                              _fallbackImage(),
-                                    )
-                                  : _fallbackImage(),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _safeText(product['name']),
-                                    style: TextStyle(
-                                      color: titleColor,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                      height: 1.35,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFFF5A52)
-                                              .withValues(alpha: 0.10),
-                                          borderRadius:
-                                              BorderRadius.circular(999),
-                                        ),
-                                        child: Text(
-                                          price != null
-                                              ? '$currencySymbol$price'
-                                              : 'Price unavailable',
-                                          style: const TextStyle(
-                                            color: Color(0xFFFF5A52),
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.amber
-                                              .withValues(alpha: 0.12),
-                                          borderRadius:
-                                              BorderRadius.circular(999),
-                                        ),
-                                        child: Text(
-                                          rating != null
-                                              ? '⭐ $rating'
-                                              : 'No rating',
-                                          style: const TextStyle(
-                                            color: Colors.amber,
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Sold by ${_safeText(product['store'], fallback: 'Unknown store')}',
-                                    style: TextStyle(
-                                      color: subColor,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          _safeText(product['reason'], fallback: ''),
-                          style: TextStyle(
-                            color: subColor,
-                            fontSize: 13,
-                            height: 1.45,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(18),
+                            child: imageUrl.isNotEmpty
+                                ? Image.network(
+                                    imageUrl,
+                                    width: 96,
+                                    height: 96,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) =>
+                                        _fallbackImage(),
+                                  )
+                                : _fallbackImage(),
                           ),
-                        ),
-                        const SizedBox(height: 14),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: GhostButton(
-                                label: 'Save',
-                                icon: Icons.favorite_border,
-                                onPressed: () async {
-                                  await context
-                                      .read<SearchProvider>()
-                                      .saveFavoriteProduct(product);
-
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Saved to favorites'),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _safeText(product['name']),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: titleColor,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.2,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 10,
+                                  runSpacing: 10,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 8,
                                       ),
-                                    );
-                                  }
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: productUrl.isNotEmpty
-                                    ? () => onOpenProductUrl(productUrl)
-                                    : null,
-                                style: OutlinedButton.styleFrom(
-                                  side: BorderSide(color: borderColor),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFF5A52)
+                                            .withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(999),
+                                      ),
+                                      child: Text(
+                                        price != null
+                                            ? '$currencySymbol$price'
+                                            : 'No price',
+                                        style: const TextStyle(
+                                          color: Color(0xFFFF5A52),
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFFC857)
+                                            .withValues(alpha: 0.14),
+                                        borderRadius: BorderRadius.circular(999),
+                                      ),
+                                      child: Text(
+                                        rating != null ? '⭐ $rating' : 'No rating',
+                                        style: const TextStyle(
+                                          color: Color(0xFFFFC857),
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                icon: const Icon(Icons.open_in_new, size: 18),
-                                label: const Text(
-                                  'View product',
+                                const SizedBox(height: 10),
+                                Text(
+                                  'Sold by ${_safeText(product['store'])}',
                                   style: TextStyle(
-                                    fontWeight: FontWeight.w700,
+                                    color: textMuted,
+                                    fontSize: 13,
                                   ),
                                 ),
-                              ),
+                              ],
                             ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: productUrl.isNotEmpty
-                                    ? () => onOpenProductUrl(productUrl)
-                                    : null,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFFF5A52),
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                ),
-                                icon: const Icon(
-                                  Icons.shopping_cart_checkout,
-                                  size: 18,
-                                ),
-                                label: const Text(
-                                  'Buy now',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        _safeText(product['reason']),
+                        style: TextStyle(
+                          color: textMuted,
+                          fontSize: 14,
+                          height: 1.4,
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                         Expanded(
+  child: OutlinedButton.icon(
+   onPressed: () async {
+  final provider = Provider.of<SearchProvider>(context, listen: false);
+  final messenger = ScaffoldMessenger.of(context);
+  final nextSaved = !isSaved;
+
+  setState(() {
+    if (nextSaved) {
+      savedProducts.add(productId);
+    } else {
+      savedProducts.remove(productId);
+    }
+  });
+
+  try {
+    if (nextSaved) {
+      await provider.saveFavoriteProduct(product);
+
+      if (!mounted) return;
+
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Saved to favorites')),
+      );
+    }
+  } catch (e) {
+    if (!mounted) return;
+
+    setState(() {
+      if (nextSaved) {
+        savedProducts.remove(productId);
+      } else {
+        savedProducts.add(productId);
+      }
+    });
+
+    messenger.showSnackBar(
+      SnackBar(content: Text('Failed: $e')),
+    );
+  }
+},
+    style: OutlinedButton.styleFrom(
+      foregroundColor: isSaved ? const Color(0xFFFF5A52) : titleColor,
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      side: BorderSide(
+        color: isSaved ? const Color(0xFFFF5A52) : borderColor,
+        width: 1.4,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+      ),
+    ),
+    icon: Icon(
+      isSaved ? Icons.favorite : Icons.favorite_border,
+      color: isSaved ? const Color(0xFFFF5A52) : titleColor,
+    ),
+    label: Text(
+      isSaved ? 'Saved' : 'Save',
+      style: TextStyle(
+        color: isSaved ? const Color(0xFFFF5A52) : titleColor,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  ),
+),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: productUrl.isNotEmpty
+                                  ? () => widget.onOpenProductUrl(productUrl)
+                                  : null,
+                              style: OutlinedButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                side: BorderSide(color: borderColor),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              icon: const Icon(Icons.open_in_new, size: 18),
+                              label: const Text(
+                                'View',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: productUrl.isNotEmpty
+                                  ? () => widget.onOpenProductUrl(productUrl)
+                                  : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFFF5A52),
+                                foregroundColor: Colors.white,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              icon: const Icon(
+                                Icons.shopping_cart_checkout,
+                                size: 18,
+                              ),
+                              label: const Text(
+                                'Buy',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -1730,7 +1745,7 @@ class _ResultsSection extends StatelessWidget {
             Text(
               'No products found in the response.',
               style: TextStyle(
-                color: subColor,
+                color: widget.subColor,
                 fontSize: 14,
               ),
             ),
@@ -1746,7 +1761,7 @@ class _ResultsSection extends StatelessWidget {
       child: RichText(
         text: TextSpan(
           style: TextStyle(
-            color: subColor,
+            color: widget.subColor,
             fontSize: 15,
             height: 1.5,
           ),
@@ -1754,7 +1769,7 @@ class _ResultsSection extends StatelessWidget {
             TextSpan(
               text: '$label: ',
               style: TextStyle(
-                color: titleColor,
+                color: widget.titleColor,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -1795,6 +1810,8 @@ class HelpPage extends StatelessWidget {
     );
   }
 }
+
+
 
                          
 

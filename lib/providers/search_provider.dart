@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/search_session.dart';
@@ -212,20 +211,40 @@ class SearchProvider extends ChangeNotifier {
     });
   }
 
-  Future<void> saveFavoriteProduct(Map<String, dynamic> product) async {
-    final uid = _uid;
-    if (uid == null) return;
+Future<void> saveFavoriteProduct(Map<String, dynamic> product) async {
+  debugPrint('🔥 SAVE FUNCTION TRIGGERED');
 
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('favorites')
-        .add({
-      ...product,
-      'savedAt': FieldValue.serverTimestamp(),
-    });
+  final user = FirebaseAuth.instance.currentUser;
+  debugPrint('👤 Current user: ${user?.uid}');
+  debugPrint('📦 Product received: $product');
+
+  final uid = _uid;
+  if (uid == null) {
+    throw Exception('User not logged in');
   }
 
+  final cleanedProduct = <String, dynamic>{
+    'name': product['name']?.toString() ?? 'Unknown product',
+    'price': product['price'] is num ? product['price'] : null,
+    'store': product['store']?.toString() ?? 'Unknown store',
+    'rating': product['rating'] is num ? product['rating'] : null,
+    'image': product['image']?.toString() ?? '',
+    'url': product['url']?.toString() ?? '',
+    'reason': product['reason']?.toString() ?? '',
+    'savedAt': FieldValue.serverTimestamp(),
+  };
+
+  debugPrint('💾 Saving favorite for user: $uid');
+  debugPrint('💾 Cleaned product: $cleanedProduct');
+
+  await FirebaseFirestore.instance
+      .collection('users')
+      .doc(uid)
+      .collection('favorites')
+      .add(cleanedProduct);
+
+  debugPrint('✅ Favorite saved');
+}
   Future<void> createNewSession() async {
     final newSession = _buildDefaultSession();
 
