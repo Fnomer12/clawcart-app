@@ -4,6 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../utils/location_utils.dart';
+import '../../shared/widgets/search_loading.dart';
+
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+
+
+
+
+import '../saved/saved_products_screen.dart';
+import 'dart:ui';
 
 
 import '../../shared/widgets/ghost_button.dart';
@@ -26,6 +35,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final AuthService authService = AuthService();
 
+  Future<DocumentSnapshot<Map<String, dynamic>>>? userFuture;
+
   @override
   Widget build(BuildContext context) {
     final searchProvider = context.watch<SearchProvider>();
@@ -43,6 +54,10 @@ if (user == null) {
     body: Center(child: Text("User not logged in")),
   );
 }
+
+userFuture ??=
+    FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    
     final width = MediaQuery.of(context).size.width;
     final showPermanentSidebar = width >= 900;
 
@@ -59,7 +74,7 @@ if (user == null) {
         isDark ? Colors.white.withValues(alpha: 0.68) : Colors.black54;
 
     return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
+      future: userFuture,
       builder: (context, snapshot) {
   if (snapshot.connectionState == ConnectionState.waiting) {
     return const Scaffold(
@@ -163,16 +178,12 @@ if (user == null) {
               aiResult: searchProvider.currentSession.aiResult,
               aiError: searchProvider.currentSession.aiError,
               selectedLocation: searchProvider.currentSession.location,
-              selectedCity: searchProvider.currentSession.city,
               currencySymbol: LocationUtils.getCurrencySymbol(
                 searchProvider.currentSession.location,
               ),
               selectedPriceRange: searchProvider.currentSession.priceRange,
               onLocationChanged: (value) async {
                 searchProvider.updateLocation(value);
-              },
-              onCityChanged: (value) async {
-                searchProvider.updateCity(value);
               },
               onPriceRangeChanged: (value) async {
                 searchProvider.updatePriceRange(value);
@@ -433,7 +444,7 @@ SizedBox(
           isExpanded: true,
           dropdownColor: bg,
           iconEnabledColor: textColor,
-          style: TextStyle(color: textColor, fontSize: 16),
+style: TextStyle(color: textColor, fontSize: 16),
           items: options
               .map(
                 (item) => DropdownMenuItem<String>(
@@ -512,38 +523,51 @@ SizedBox(
 }
 
 
-class _SidebarContent extends StatelessWidget {
+class _SidebarContent extends StatefulWidget {
   final String fullName;
   final String email;
   final List<String> history;
   final int selectedIndex;
   final ValueChanged<int> onSelect;
- final VoidCallback onOpenSettings;
-final VoidCallback onNewSearch;
-final Future<void> Function(int) onDeleteSession;
+  final VoidCallback onOpenSettings;
+  final VoidCallback onNewSearch;
+  final Future<void> Function(int) onDeleteSession;
   final Color panelBg;
   final Color borderColor;
   final Color titleColor;
   final Color subColor;
 
   const _SidebarContent({
-  required this.fullName,
-  required this.email,
-  required this.history,
-  required this.selectedIndex,
-  required this.onSelect,
-  required this.onOpenSettings,
-  required this.onNewSearch,
-  required this.onDeleteSession,
-  required this.panelBg,
-  required this.borderColor,
-  required this.titleColor,
-  required this.subColor,
-});
+    required this.fullName,
+    required this.email,
+    required this.history,
+    required this.selectedIndex,
+    required this.onSelect,
+    required this.onOpenSettings,
+    required this.onNewSearch,
+    required this.onDeleteSession,
+    required this.panelBg,
+    required this.borderColor,
+    required this.titleColor,
+    required this.subColor,
+  });
+
+  @override
+  State<_SidebarContent> createState() => _SidebarContentState();
+}
+
+class _SidebarContentState extends State<_SidebarContent> {
+  String historySearch = '';
 
   @override
   Widget build(BuildContext context) {
     const accent = Color(0xFFFF5A52);
+
+    final filteredHistory = widget.history
+        .where(
+          (item) => item.toLowerCase().contains(historySearch.toLowerCase()),
+        )
+        .toList();
 
     return Column(
       children: [
@@ -555,40 +579,45 @@ final Future<void> Function(int) onDeleteSession;
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'ClawCart',
+                  'ClawCart 🦞',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: titleColor,
+                    color: widget.titleColor,
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
               IconButton(
-                onPressed: onNewSearch,
+                onPressed: widget.onNewSearch,
                 tooltip: 'New search',
-                icon: Icon(Icons.edit_square, color: subColor),
+                icon: Icon(Icons.edit_square, color: widget.subColor),
               ),
             ],
           ),
         ),
+
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Container(
             height: 46,
             decoration: BoxDecoration(
-              color: panelBg,
+              color: widget.panelBg,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: borderColor),
+              border: Border.all(color: widget.borderColor),
             ),
             child: TextField(
-              readOnly: true,
-              style: TextStyle(color: titleColor),
+              style: TextStyle(color: widget.titleColor),
+              onChanged: (value) {
+                setState(() {
+                  historySearch = value;
+                });
+              },
               decoration: InputDecoration(
                 hintText: AppStrings.t(context, 'search_history'),
-                hintStyle: TextStyle(color: subColor),
-                prefixIcon: Icon(Icons.search, color: subColor),
+                hintStyle: TextStyle(color: widget.subColor),
+                prefixIcon: Icon(Icons.search, color: widget.subColor),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
               ),
@@ -597,113 +626,123 @@ final Future<void> Function(int) onDeleteSession;
         ),
 
         Padding(
-  padding: const EdgeInsets.symmetric(horizontal: 16),
-  child: Text(
-    'Long press a search to delete it',
-    style: TextStyle(
-      color: subColor,
-      fontSize: 12,
-    ),
-  ),
-),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'Long press a search to delete it',
+            style: TextStyle(
+              color: widget.subColor,
+              fontSize: 12,
+            ),
+          ),
+        ),
+
         const SizedBox(height: 16),
+
         Expanded(
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: history.length,
+            itemCount: filteredHistory.length,
             separatorBuilder: (_, _) => const SizedBox(height: 6),
             itemBuilder: (context, index) {
-  final active = index == selectedIndex;
+              final title = filteredHistory[index];
+              final realIndex = widget.history.indexOf(title);
+              final active = realIndex == widget.selectedIndex;
 
-  return InkWell(
-  borderRadius: BorderRadius.circular(14),
-  onTap: () => onSelect(index),
-  onLongPress: () async {
-    final shouldDelete = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Delete search'),
-          content: Text('Do you want to delete "${history[index]}"?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
-    );
+              return InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => widget.onSelect(realIndex),
+                onLongPress: () async {
+                  final shouldDelete = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogContext) {
+                      return AlertDialog(
+                        title: const Text('Delete search'),
+                        content: Text('Do you want to delete "$title"?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, false),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, true),
+                            child: const Text('Delete'),
+                          ),
+                        ],
+                      );
+                    },
+                  );
 
-    if (shouldDelete == true) {
-      await onDeleteSession(index);
+                  if (shouldDelete == true) {
+                    await widget.onDeleteSession(realIndex);
 
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Search deleted')),
-        );
-      }
-    }
-  },
-  child: Container(
-    padding: const EdgeInsets.symmetric(
-      horizontal: 14,
-      vertical: 14,
-    ),
-    decoration: BoxDecoration(
-      color: active ? panelBg : Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(
-        color: active ? borderColor : Colors.transparent,
-      ),
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(
-          Icons.folder_open_outlined,
-          color: subColor,
-          size: 20,
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            history[index],
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: titleColor,
-              fontSize: 15,
-              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-            ),
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Search deleted')),
+                      );
+                    }
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    color: active ? widget.panelBg : Colors.transparent,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: active
+                          ? widget.borderColor
+                          : Colors.transparent,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.folder_open_outlined,
+                        color: widget.subColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: widget.titleColor,
+                            fontSize: 15,
+                            fontWeight:
+                                active ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
         ),
-      ],
-    ),
-  ),
-);},
-          ),
-        ),
+
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             border: Border(
-              top: BorderSide(color: borderColor),
+              top: BorderSide(color: widget.borderColor),
             ),
           ),
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
-            onTap: onOpenSettings,
+            onTap: widget.onOpenSettings,
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: panelBg,
+                color: widget.panelBg,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: borderColor),
+                border: Border.all(color: widget.borderColor),
               ),
               child: Row(
                 children: [
@@ -711,7 +750,7 @@ final Future<void> Function(int) onDeleteSession;
                     radius: 18,
                     backgroundColor: const Color(0xFFFFA000),
                     child: Text(
-                      _initials(fullName),
+                      _initials(widget.fullName),
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
@@ -724,29 +763,29 @@ final Future<void> Function(int) onDeleteSession;
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          fullName,
+                          widget.fullName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: titleColor,
+                            color: widget.titleColor,
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          email,
+                          widget.email,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: subColor,
+                            color: widget.subColor,
                             fontSize: 13,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  Icon(Icons.settings, color: subColor),
+                  Icon(Icons.settings, color: widget.subColor),
                 ],
               ),
             ),
@@ -764,7 +803,7 @@ final Future<void> Function(int) onDeleteSession;
   }
 }
 
-class _MainArea extends StatelessWidget {
+class _MainArea extends StatefulWidget {
   final String fullName;
   final TextEditingController promptCtrl;
   final Future<void> Function() onSubmit;
@@ -778,12 +817,10 @@ class _MainArea extends StatelessWidget {
   final String? aiError;
 
   final String selectedLocation;
-  final String selectedCity;
   final String currencySymbol;
   final RangeValues selectedPriceRange;
 
   final ValueChanged<String> onLocationChanged;
-  final ValueChanged<String> onCityChanged;
   final ValueChanged<RangeValues> onPriceRangeChanged;
 
   const _MainArea({
@@ -799,13 +836,36 @@ class _MainArea extends StatelessWidget {
     required this.aiResult,
     required this.aiError,
     required this.selectedLocation,
-    required this.selectedCity,
     required this.currencySymbol,
     required this.selectedPriceRange,
     required this.onLocationChanged,
-    required this.onCityChanged,
     required this.onPriceRangeChanged,
   });
+
+  @override
+  State<_MainArea> createState() => _MainAreaState();
+}
+
+class _MainAreaState extends State<_MainArea> {
+  late RangeValues localRange;
+
+  late stt.SpeechToText _speech;
+bool _isListening = false;
+
+  final List<String> quickSearches = [
+  'Cars',
+  'Phones',
+  'Laptops',
+  'Clothes',
+  'Groceries',
+];
+
+ @override
+void initState() {
+  super.initState();
+  localRange = widget.selectedPriceRange;
+  _speech = stt.SpeechToText();
+}
 
   Future<void> _openProductUrl(String? url) async {
     if (url == null || url.trim().isEmpty) return;
@@ -818,496 +878,423 @@ class _MainArea extends StatelessWidget {
     }
   }
 
+  Future<void> _listen() async {
+  if (!_isListening) {
+    final available = await _speech.initialize();
 
+    if (available) {
+      setState(() {
+        _isListening = true;
+      });
+
+      _speech.listen(
+        onResult: (result) {
+          setState(() {
+            widget.promptCtrl.text = result.recognizedWords;
+          });
+        },
+      );
+    }
+  } else {
+    setState(() {
+      _isListening = false;
+    });
+
+    await _speech.stop();
+  }
+}
+
+  Future<void> _handleSearch() async {
+  FocusScope.of(context).unfocus(); // closes keyboard
+  await widget.onSubmit();
+}
+
+  // ✅ PASTE THE BIG @override Widget build HERE
   @override
-  Widget build(BuildContext context) {
-    const accent = Color(0xFFFF5A52);
-    final width = MediaQuery.of(context).size.width;
-    final isSmallScreen = width < 600;
+Widget build(BuildContext context) {
+  const accent = Color(0xFFFF5A52);
+  final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final availableCities =
-        LocationUtils.countryCities[selectedLocation] ?? ['Accra'];
-
-   
-
-    return Column(
+  return Container(
+    color: isDark ? const Color(0xFF09090D) : const Color(0xFFF6F7FB),
+    child: Column(
       children: [
-        Builder(
-          builder: (context) => Container(
-            height: 68,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              border: Border(
-                bottom: BorderSide(color: borderColor),
+        /// 🔥 NAVBAR (FIXED)
+        /// 🔥 GLASSY NAVBAR
+Padding(
+  padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+  child: ClipRRect(
+    borderRadius: BorderRadius.circular(28),
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.white.withValues(alpha: 0.65),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.18),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 30,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Builder(
+              builder: (context) => IconButton(
+                onPressed: () => Scaffold.of(context).openDrawer(),
+                icon: Icon(
+                  Icons.menu_rounded,
+                  color: isDark ? Colors.white : Colors.black87,
+                  size: 32,
+                ),
               ),
             ),
-            child: Row(
-              children: [
-                if (showMenuButton)
-                  IconButton(
-                    onPressed: () => Scaffold.of(context).openDrawer(),
-                    icon: Icon(Icons.menu, color: titleColor),
-                  ),
-                Expanded(
-                  child: Text(
-                    'ClawCart',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: titleColor,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
+
+            Text(
+              'ClawCart 🦞',
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black87,
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(FirebaseAuth.instance.currentUser!.uid)
+                  .collection('favorites')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final count = snapshot.data?.docs.length ?? 0;
+
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        count > 0 ? Icons.favorite : Icons.favorite_border,
+                        color: count > 0
+                            ? const Color(0xFFFF5A52)
+                            : isDark
+                                ? Colors.white
+                                : Colors.black87,
+                        size: 30,
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SavedProductsScreen(),
+                          ),
+                        );
+                      },
                     ),
+                    if (count > 0)
+                      Positioned(
+                        right: 2,
+                        top: 2,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          padding: const EdgeInsets.all(5),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFF5A52),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '$count',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    ),
+  ),
+),
+
+        /// 🔥 MAIN CONTENT (YOU WERE MISSING THIS)
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${AppStrings.t(context, 'welcome')} ${widget.fullName}',
+                  style: TextStyle(
+                    color: widget.titleColor,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
+
+                const SizedBox(height: 20),
+
+               /// 🔍 SEARCH CARD
+Container(
+  padding: const EdgeInsets.all(20),
+  decoration: BoxDecoration(
+    color: widget.panelBg,
+    borderRadius: BorderRadius.circular(25),
+    border: Border.all(color: widget.borderColor),
+  ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+     TextField(
+  controller: widget.promptCtrl,
+  maxLines: 4,
+  textInputAction: TextInputAction.search,
+  onSubmitted: (_) => _handleSearch(),
+        style: TextStyle(color: widget.titleColor),
+        decoration: InputDecoration(
+  hintText: _isListening ? 'Listening...' : 'Search for anything...',
+  hintStyle: TextStyle(color: widget.subColor),
+  border: InputBorder.none,
+  suffixIcon: IconButton(
+    onPressed: _listen,
+    icon: Icon(
+      _isListening ? Icons.mic : Icons.mic_none,
+      color: const Color(0xFFFF5A52),
+    ),
+  ),
+),
+      ),
+
+
+      const SizedBox(height: 14),
+
+Wrap(
+  spacing: 10,
+  runSpacing: 10,
+  children: quickSearches.map((item) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: () {
+        widget.promptCtrl.text = item;
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF5A52).withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: const Color(0xFFFF5A52).withValues(alpha: 0.3),
+          ),
+        ),
+        child: Text(
+          item,
+          style: const TextStyle(
+            color: Color(0xFFFF5A52),
+            fontWeight: FontWeight.w800,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }).toList(),
+),
+
+const SizedBox(height: 18),
+
+      const SizedBox(height: 18),
+
+      DropdownButtonFormField<String>(
+        value: widget.selectedLocation,
+        dropdownColor: widget.panelBg,
+        style: TextStyle(color: widget.titleColor),
+        decoration: InputDecoration(
+          labelText: 'Country',
+          labelStyle: TextStyle(color: widget.subColor),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: BorderSide(color: widget.borderColor),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: const BorderSide(color: Color(0xFFFF5A52)),
+          ),
+        ),
+
+        
+
+        items: const [
+          DropdownMenuItem(value: 'GH', child: Text('Ghana')),
+          DropdownMenuItem(value: 'UK', child: Text('United Kingdom')),
+          DropdownMenuItem(value: 'US', child: Text('United States')),
+        ],
+        onChanged: (value) {
+          if (value != null) widget.onLocationChanged(value);
+        },
+      ),
+
+      const SizedBox(height: 22),
+
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Price Range',
+            style: TextStyle(
+              color: widget.titleColor,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          Text(
+            '${widget.currencySymbol}${localRange.start.round()} - ${widget.currencySymbol}${localRange.end.round()}',
+            style: const TextStyle(
+              color: Color(0xFFFF5A52),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+
+      const SizedBox(height: 10),
+
+      Theme(
+        data: Theme.of(context).copyWith(
+          sliderTheme: SliderTheme.of(context).copyWith(
+            trackHeight: 7,
+            activeTrackColor: const Color(0xFFFF5A52),
+            inactiveTrackColor:
+                const Color(0xFFFF5A52).withValues(alpha: 0.18),
+            thumbColor: Colors.white,
+            overlayColor:
+                const Color(0xFFFF5A52).withValues(alpha: 0.15),
+            rangeThumbShape:
+                const RoundRangeSliderThumbShape(enabledThumbRadius: 11),
+            rangeTrackShape: const RoundedRectRangeSliderTrackShape(),
+            valueIndicatorColor: const Color(0xFFFF5A52),
+          ),
+        ),
+        child: RangeSlider(
+          values: localRange,
+          min: 1,
+          max: 5000000,
+          divisions: 100,
+          labels: RangeLabels(
+            '${widget.currencySymbol}${localRange.start.round()}',
+            '${widget.currencySymbol}${localRange.end.round()}',
+          ),
+          onChanged: (value) {
+            setState(() {
+              localRange = value;
+            });
+          },
+          onChangeEnd: (value) {
+            widget.onPriceRangeChanged(value);
+          },
+        ),
+      ),
+
+      const SizedBox(height: 20),
+
+      PrimaryButton(
+  label: widget.isLoading ? 'Searching...' : 'Find best options',
+  isLoading: widget.isLoading,
+  icon: Icons.search,
+  onPressed: _handleSearch,
+),
+    ],
+  ),
+),
+
+const SizedBox(height: 18),
+
+if (widget.aiResult != null &&
+    widget.aiResult!['suggestions'] is List &&
+    (widget.aiResult!['suggestions'] as List).isNotEmpty) ...[
+  Text(
+    'AI Suggestions',
+    style: TextStyle(
+      color: widget.titleColor,
+      fontSize: 18,
+      fontWeight: FontWeight.w900,
+    ),
+  ),
+  const SizedBox(height: 10),
+  Wrap(
+    spacing: 10,
+    runSpacing: 10,
+    children: (widget.aiResult!['suggestions'] as List).map((suggestion) {
+      final text = suggestion.toString();
+
+      return InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () async {
+  widget.promptCtrl.text = text;
+  await _handleSearch();
+},
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF5A52).withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: const Color(0xFFFF5A52).withValues(alpha: 0.35),
+            ),
+          ),
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: Color(0xFFFF5A52),
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      );
+    }).toList(),
+  ),
+],
+
+const SizedBox(height: 20),
+
+/// 🔥 RESULTS
+                if (widget.isLoading)
+                  const SearchLoading()
+                else if (widget.aiError != null)
+                  Text(widget.aiError!,
+                      style: const TextStyle(color: Colors.red))
+                else if (widget.aiResult != null)
+                  _ResultsSection(
+                    aiResult: widget.aiResult!,
+                    panelBg: widget.panelBg,
+                    borderColor: widget.borderColor,
+                    titleColor: widget.titleColor,
+                    subColor: widget.subColor,
+                    currencySymbol: widget.currencySymbol,
+                    onOpenProductUrl: _openProductUrl,
+                  ),
               ],
             ),
           ),
         ),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(
-              isSmallScreen ? 16 : 24,
-              24,
-              isSmallScreen ? 16 : 24,
-              24,
-            ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 850),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${AppStrings.t(context, 'welcome')} $fullName 👋',
-                      softWrap: true,
-                      style: TextStyle(
-                        color: titleColor,
-                        fontSize: isSmallScreen ? 30 : 40,
-                        fontWeight: FontWeight.w800,
-                        height: 1.1,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      AppStrings.t(context, 'home_subtitle'),
-                      softWrap: true,
-                      style: TextStyle(
-                        color: subColor,
-                        fontSize: isSmallScreen ? 15 : 17,
-                        height: 1.6,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(isSmallScreen ? 18 : 24),
-                      decoration: BoxDecoration(
-                        gradient: Theme.of(context).brightness == Brightness.dark
-                            ? const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Color(0xFF15151D),
-                                  Color(0xFF12121A),
-                                ],
-                              )
-                            : const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Color(0xFFFFFFFF),
-                                  Color(0xFFF9FAFD),
-                                ],
-                              ),
-                        borderRadius: BorderRadius.circular(28),
-                        border: Border.all(
-                          color: borderColor.withValues(alpha: 0.7),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Padding(
-                                padding: EdgeInsets.only(top: 2),
-                                child: Icon(Icons.auto_awesome, color: accent),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  AppStrings.t(context, 'what_shopping_for'),
-                                  softWrap: true,
-                                  style: TextStyle(
-                                    color: titleColor,
-                                    fontSize: isSmallScreen ? 20 : 22,
-                                    fontWeight: FontWeight.w700,
-                                    height: 1.3,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-
-                          TextField(
-                            controller: promptCtrl,
-                            maxLines: 6,
-                            minLines: 4,
-                            style: TextStyle(color: titleColor),
-                            decoration: InputDecoration(
-                              hintText: AppStrings.t(context, 'prompt_example'),
-                              hintStyle: TextStyle(
-                                color: subColor,
-                                fontSize: isSmallScreen ? 15 : 16,
-                              ),
-                              filled: true,
-                              fillColor: Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? const Color(0xFF171720)
-                                  : const Color(0xFFF8F9FC),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(20),
-                                borderSide: BorderSide(
-                                  color: borderColor.withValues(alpha: 0.8),
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(20),
-                                borderSide: const BorderSide(
-                                  color: accent,
-                                  width: 1.5,
-                                ),
-                              ),
-                              contentPadding: const EdgeInsets.all(20),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          Text(
-                            'Country',
-                            style: TextStyle(
-                              color: titleColor,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? const Color(0xFF171720)
-                                  : const Color(0xFFF8F9FC),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: borderColor.withValues(alpha: 0.8),
-                              ),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: selectedLocation,
-                                isExpanded: true,
-                                dropdownColor: panelBg,
-                                iconEnabledColor: titleColor,
-                                style: TextStyle(
-                                  color: titleColor,
-                                  fontSize: 16,
-                                ),
-                                items: const [
-                                  DropdownMenuItem(
-                                    value: 'GH',
-                                    child: Text('Ghana'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 'UK',
-                                    child: Text('United Kingdom'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 'US',
-                                    child: Text('United States'),
-                                  ),
-                                ],
-                                onChanged: (value) {
-                                  if (value != null) onLocationChanged(value);
-                                },
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          Text(
-                            'City',
-                            style: TextStyle(
-                              color: titleColor,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? const Color(0xFF171720)
-                                  : const Color(0xFFF8F9FC),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: borderColor.withValues(alpha: 0.8),
-                              ),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: availableCities.contains(selectedCity)
-                                    ? selectedCity
-                                    : availableCities.first,
-                                isExpanded: true,
-                                dropdownColor: panelBg,
-                                iconEnabledColor: titleColor,
-                                style: TextStyle(
-                                  color: titleColor,
-                                  fontSize: 16,
-                                ),
-                                items: availableCities
-                                    .map(
-                                      (city) => DropdownMenuItem<String>(
-                                        value: city,
-                                        child: Text(city),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (value) {
-                                  if (value != null) onCityChanged(value);
-                                },
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          Text(
-                            'Price Range',
-                            style: TextStyle(
-                              color: titleColor,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-
-                          Text(
-                            '$currencySymbol${selectedPriceRange.start.round()} - $currencySymbol${selectedPriceRange.end.round()}',
-                            style: TextStyle(
-                              color: subColor,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-
-                          RangeSlider(
-                            values: selectedPriceRange,
-                            min: 1,
-                            max: 1000,
-                            divisions: 20,
-                            labels: RangeLabels(
-                              '$currencySymbol${selectedPriceRange.start.round()}',
-                              '$currencySymbol${selectedPriceRange.end.round()}',
-                            ),
-                            onChanged: onPriceRangeChanged,
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          PrimaryButton(
-                            label: AppStrings.t(context, 'find_best_options'),
-                            isLoading: isLoading,
-                            icon: Icons.search,
-                            onPressed: onSubmit,
-                          ),
-
-                          const SizedBox(height: 18),
-
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 350),
-                            switchInCurve: Curves.easeOut,
-                            switchOutCurve: Curves.easeIn,
-                            child: isLoading
-                                ? Column(
-                                    key: const ValueKey('loading'),
-                                    children: const [
-                                      SkeletonCard(),
-                                      SkeletonCard(),
-                                      SkeletonCard(),
-                                    ],
-                                  )
-                                : aiError != null
-                                    ? Container(
-                                        key: const ValueKey('error'),
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.all(16),
-                                        decoration: BoxDecoration(
-                                          color: panelBg,
-                                          borderRadius:
-                                              BorderRadius.circular(18),
-                                          border: Border.all(
-                                            color: Colors.redAccent,
-                                          ),
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              aiError!,
-                                              style: const TextStyle(
-                                                color: Colors.redAccent,
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 12),
-                                            GhostButton(
-                                              label: 'Retry',
-                                              icon: Icons.refresh,
-                                              onPressed: () => context
-                                                  .read<SearchProvider>()
-                                                  .retrySearch(),
-                                            ),
-                                          ],
-                                        ),
-                                      )
-                                    : aiResult == null
-                                        ? Container(
-                                            key: const ValueKey('empty'),
-                                            width: double.infinity,
-                                            padding: const EdgeInsets.all(28),
-                                            decoration: BoxDecoration(
-                                              color: panelBg,
-                                              borderRadius:
-                                                  BorderRadius.circular(24),
-                                              border:
-                                                  Border.all(color: borderColor),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black
-                                                      .withValues(alpha: 0.03),
-                                                  blurRadius: 16,
-                                                  offset: const Offset(0, 6),
-                                                ),
-                                              ],
-                                            ),
-                                            child: Column(
-                                              children: [
-                                                Container(
-                                                  width: 68,
-                                                  height: 68,
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(
-                                                      0xFFFF5A52,
-                                                    ).withValues(alpha: 0.10),
-                                                    shape: BoxShape.circle,
-                                                  ),
-                                                  child: const Icon(
-                                                    Icons.shopping_bag_outlined,
-                                                    size: 32,
-                                                    color: Color(0xFFFF5A52),
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 14),
-                                                Text(
-                                                  'Start a search',
-                                                  style: TextStyle(
-                                                    color: titleColor,
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 8),
-                                                Text(
-                                                  'Describe what you want and ClawCart will suggest the best options for you.',
-                                                  textAlign: TextAlign.center,
-                                                  style: TextStyle(
-                                                    color: subColor,
-                                                    fontSize: 14,
-                                                    height: 1.5,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          )
-                                        : _ResultsSection(
-                                            aiResult: aiResult!,
-                                            panelBg: panelBg,
-                                            borderColor: borderColor,
-                                            titleColor: titleColor,
-                                            subColor: subColor,
-                                            currencySymbol: currencySymbol,
-                                            onOpenProductUrl: _openProductUrl,
-                                          ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
       ],
-    );
-  }
-
-  Widget _resultRow(
-    String label,
-    String value,
-    Color titleColor,
-    Color subColor,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: RichText(
-        text: TextSpan(
-          style: TextStyle(
-            color: subColor,
-            fontSize: 15,
-            height: 1.5,
-          ),
-          children: [
-            TextSpan(
-              text: '$label: ',
-              style: TextStyle(
-                color: titleColor,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            TextSpan(text: value),
-          ],
-        ),
-      ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _ResultsSection extends StatefulWidget {
@@ -1365,7 +1352,6 @@ class _ResultsSectionState extends State<_ResultsSection> {
     final borderColor = widget.borderColor;
     final titleColor = widget.titleColor;
     final subColor = widget.subColor;
-    final currencySymbol = widget.currencySymbol;
 
     return Container(
       key: const ValueKey('results'),
@@ -1390,11 +1376,11 @@ class _ResultsSectionState extends State<_ResultsSection> {
           const SizedBox(height: 14),
           _resultRow('Category', _safeText(widget.aiResult['category'])),
           _resultRow(
-            'Budget',
-            widget.aiResult['budget'] != null
-                ? '$currencySymbol${widget.aiResult['budget']}'
-                : '-',
-          ),
+  'Budget',
+  widget.aiResult['budget'] != null
+      ? '${widget.currencySymbol}${widget.aiResult['budget']}'
+      : '-',
+),
           _resultRow(
             'Priorities',
             widget.aiResult['priorities'] is List
@@ -1564,9 +1550,9 @@ final isSaved = savedProducts.contains(productId);
                                         borderRadius: BorderRadius.circular(999),
                                       ),
                                       child: Text(
-                                        price != null
-                                            ? '$currencySymbol$price'
-                                            : 'No price',
+                                       price != null
+                                          ? price.toString()
+                                          : 'No price',
                                         style: const TextStyle(
                                           color: Color(0xFFFF5A52),
                                           fontWeight: FontWeight.w800,
@@ -1637,7 +1623,10 @@ final isSaved = savedProducts.contains(productId);
 
   try {
     if (nextSaved) {
-      await provider.saveFavoriteProduct(product);
+    await provider.saveFavoriteProduct({
+  ...product,
+  'id': productId,
+});
 
       if (!mounted) return;
 

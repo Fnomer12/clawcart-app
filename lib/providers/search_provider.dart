@@ -53,7 +53,7 @@ class SearchProvider extends ChangeNotifier {
       aiError: null,
       location: 'GH',
       city: 'Accra',
-      priceRange: const RangeValues(1, 500),
+      priceRange: const RangeValues(1, 5000000),
     );
   }
 
@@ -128,7 +128,7 @@ class SearchProvider extends ChangeNotifier {
         city: city,
         priceRange: RangeValues(
           ((data['priceStart'] ?? 1) as num).toDouble(),
-          ((data['priceEnd'] ?? 500) as num).toDouble(),
+          ((data['priceEnd'] ?? 5000000) as num).toDouble(),
         ),
       );
 
@@ -225,7 +225,7 @@ Future<void> saveFavoriteProduct(Map<String, dynamic> product) async {
 
   final cleanedProduct = <String, dynamic>{
     'name': product['name']?.toString() ?? 'Unknown product',
-    'price': product['price'] is num ? product['price'] : null,
+    'price': product['price']?.toString() ?? 'No price',
     'store': product['store']?.toString() ?? 'Unknown store',
     'rating': product['rating'] is num ? product['rating'] : null,
     'image': product['image']?.toString() ?? '',
@@ -399,12 +399,13 @@ Future<void> saveFavoriteProduct(Map<String, dynamic> product) async {
     try {
       debugPrint('📡 Calling API...');
 
-      final response = await ApiService.getRecommendation(
-        text,
-        location: session.location,
-        minPrice: session.priceRange.start,
-        maxPrice: session.priceRange.end,
-      ).timeout(const Duration(seconds: 35));
+     final response = await ApiService.getRecommendation(
+  text,
+  location: session.location,
+  city: session.city, // ✅ ADD THIS LINE
+  minPrice: session.priceRange.start,
+  maxPrice: session.priceRange.end,
+).timeout(const Duration(seconds: 35));
 
       debugPrint('✅ Raw API response: $response');
 

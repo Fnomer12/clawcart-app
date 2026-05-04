@@ -3,15 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // Use this for production/any device:
-  // flutter run --dart-define=API_BASE_URL=https://your-backend-url.com
-
-  // For iOS simulator local testing:
-  // flutter run --dart-define=API_BASE_URL=http://127.0.0.1:3000
-
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://your-live-backend-url.com',
+    defaultValue: 'https://sprawl-petty-bakery.ngrok-free.dev',
   );
 
   static Future<Map<String, dynamic>> getRecommendation(
@@ -19,53 +13,72 @@ class ApiService {
     required String location,
     required double minPrice,
     required double maxPrice,
+    String city = '',
   }) async {
+    final cleanPrompt = prompt.trim();
+
+    if (cleanPrompt.isEmpty) {
+      throw Exception('Please enter what you want to search for.');
+    }
+
     final uri = Uri.parse('$baseUrl/recommend');
 
-    debugPrint('🌐 Backend URL => $baseUrl');
-    debugPrint('🌐 POST => $uri');
+    final requestBody = {
+      'prompt': cleanPrompt,
+      'location': location,
+      'city': city,
+      'minPrice': minPrice.round(),
+      'maxPrice': maxPrice.round(),
+    };
+
+    debugPrint('🌐 Backend URL: $baseUrl');
+    debugPrint('📡 POST: $uri');
+    debugPrint('📤 Body: ${jsonEncode(requestBody)}');
 
     try {
-      final requestBody = {
-        'prompt': prompt.trim(),
-        'location': location,
-        'minPrice': minPrice.round(),
-        'maxPrice': maxPrice.round(),
-      };
-
-      debugPrint('📤 REQUEST => ${jsonEncode(requestBody)}');
-
       final response = await http
           .post(
             uri,
             headers: const {
               'Content-Type': 'application/json',
+              'Accept': 'application/json',
             },
             body: jsonEncode(requestBody),
           )
           .timeout(const Duration(seconds: 60));
 
-      debugPrint('📥 STATUS => ${response.statusCode}');
-      debugPrint('📥 BODY => ${response.body}');
-
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception('Server error ${response.statusCode}: ${response.body}');
-      }
+      debugPrint('📥 Status: ${response.statusCode}');
+      debugPrint('📥 Response: ${response.body}');
 
       final decoded = jsonDecode(response.body);
 
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
+      if (decoded is! Map) {
+        throw Exception('Invalid response format from backend.');
       }
 
-      if (decoded is Map) {
-        return Map<String, dynamic>.from(decoded);
+      final decodedBody = Map<String, dynamic>.from(decoded);
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return decodedBody;
       }
 
-      throw Exception('Invalid response format');
+      throw Exception(
+        decodedBody['error']?.toString() ?? 'Backend request failed.',
+      );
     } catch (e) {
-      debugPrint('❌ API ERROR => $e');
-      throw Exception('Failed to connect to backend');
+      debugPrint('❌ API ERROR: $e');
+
+      final errorText = e.toString().replaceFirst('Exception: ', '');
+
+      if (errorText.contains('Connection refused') ||
+          errorText.contains('Failed host lookup') ||
+          errorText.contains('SocketException')) {
+        throw Exception(
+          'Failed to connect to backend. Make sure ngrok and your Node server are running.',
+        );
+      }
+
+      throw Exception(errorText);
     }
   }
 }
